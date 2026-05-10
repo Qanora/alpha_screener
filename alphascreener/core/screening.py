@@ -28,6 +28,7 @@ FACTOR_WEIGHTS = {
 Z_SCORE_CLIP = 3.0
 Z_SCORE_SCALE = 50.0 / 3.0
 MISSING_RATE_MAX = 0.30
+MISSING_SECTOR_INDUSTRY = ""
 PASS_RATE_MIN = 0.70
 PASS_RATE_NORMAL_LO = 0.80
 PASS_RATE_NORMAL_HI = 0.92
@@ -123,7 +124,43 @@ def compute_missing_rate(factor_df: pl.DataFrame) -> pl.Series:
         else:
             null_count = null_count + col_null
 
+    assert null_count is not None
     return null_count / n
+
+
+def dedup_by_sector_industry(
+    df: pl.DataFrame,
+    sector_cap: int,
+    industry_cap: int,
+    top_n: int = 20,
+) -> pl.DataFrame:
+    """Greedy dedup by sector/industry caps, sorted by coarse_score descending."""
+    work = df.sort("coarse_score", descending=True).with_columns(
+        pl.col("sector").fill_null(MISSING_SECTOR_INDUSTRY),
+        pl.col("industry").fill_null(MISSING_SECTOR_INDUSTRY),
+    )
+
+    sector_counts: dict[str, int] = {}
+    industry_counts: dict[str, int] = {}
+    keep_mask: list[bool] = []
+    kept = 0
+
+    for row in work.iter_rows(named=True):
+        sector = row["sector"]
+        industry = row["industry"]
+        sc = sector_counts.get(sector, 0)
+        ic = industry_counts.get(industry, 0)
+        if sc < sector_cap and ic < industry_cap and kept < top_n:
+            keep_mask.append(True)
+            sector_counts[sector] = sc + 1
+            industry_counts[industry] = ic + 1
+            kept += 1
+        else:
+            keep_mask.append(False)
+            if kept >= top_n:
+                break
+
+    return work[[i for i, ok in enumerate(keep_mask) if ok], :]
 
 
 class DynamicThreshold:

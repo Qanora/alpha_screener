@@ -115,9 +115,8 @@ def universe():
 
 
 @main.command()
-@click.option("--market", default="US", help="Target market (US)")
 @click.option("--top", default=20, help="Number of top picks to output")
-def screen(market: str, top: int):
+def screen(top: int):
     """Run a full market scan."""
     from datetime import date, timedelta
 
