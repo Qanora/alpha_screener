@@ -1,0 +1,7 @@
+language: zh-CN
+reviews:
+  auto_review:
+    enabled: true
+    auto_pause_after_reviewed_commits: 10
+  summarization:
+    enabled: true
