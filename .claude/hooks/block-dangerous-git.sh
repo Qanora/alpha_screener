@@ -30,14 +30,14 @@ if echo "$COMMAND" | grep -qE '^git push'; then
     exit 2
   fi
 
-  # Block push without a branch spec (defaults to current branch, risky)
-  if ! echo "$COMMAND" | grep -qE 'git push origin '; then
+  # Only allow: git push origin <branch> (with optional -u flag)
+  if ! echo "$COMMAND" | grep -qE '^git push( -u)? origin [^[:space:]:]+$'; then
     echo "BLOCKED: git push without explicit branch. Use 'git push origin <branch>'." >&2
     exit 2
   fi
 
-  # Block push to master or main (including refspecs like HEAD:master)
-  if echo "$COMMAND" | grep -qE 'git push origin ([^ ]*:)?(master|main)'; then
+  # Block push to master or main (including refs/heads/* and HEAD:* refspecs)
+  if echo "$COMMAND" | grep -qE '^git push( -u)? origin (master|main|refs/heads/master|refs/heads/main|([^[:space:]:]+:)?(master|main))$'; then
     echo "BLOCKED: git push to master/main is forbidden. Use feature branches + PR." >&2
     exit 2
   fi

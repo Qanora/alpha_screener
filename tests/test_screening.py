@@ -289,7 +289,7 @@ class TestDedupBySectorIndustry:
         assert scores == sorted(scores, reverse=True)
 
     def test_missing_sector_industry_treated_as_missing(self):
-        """None values in sector/industry are filled with MISSING_SECTOR_INDUSTRY."""
+        """None values in sector/industry are filled with MISSING_SECTOR_INDUSTRY sentinel."""
         df = pl.DataFrame(
             {
                 "ticker": ["A", "B", "C", "D"],
@@ -302,6 +302,8 @@ class TestDedupBySectorIndustry:
         assert len(result) == 4
         missing = result.filter(pl.col("sector") == MISSING_SECTOR_INDUSTRY).height
         assert missing == 2
+        # Real empty strings are not conflated with missing
+        assert MISSING_SECTOR_INDUSTRY == "<MISSING>"
 
     def test_top_n_caps_output(self):
         """top_n parameter limits total output even if caps would allow more."""

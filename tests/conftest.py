@@ -8,7 +8,8 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    if os.environ.get("CI") == "true":
+    ci = os.environ.get("CI", "").lower()
+    if ci in ("true", "1", "yes", "on"):
         skip_network = pytest.mark.skip(reason="network test skipped in CI")
         for item in items:
             if "network" in item.keywords:
