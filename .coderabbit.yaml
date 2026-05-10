@@ -1,8 +1,8 @@
 language: zh-CN
 reviews:
-  profile: BALANCED
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
   auto_review:
     enabled: true
     auto_pause_after_reviewed_commits: 10
-  summarize:
-    enabled: true
