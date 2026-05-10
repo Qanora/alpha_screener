@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install pre-commit
-        run: pip install pre-commit mypy
+        run: pip install pre-commit "mypy<2"
       - name: Run all hooks
         run: pre-commit run --all-files --show-diff-on-failure
 
@@ -92,7 +92,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e . --no-deps
-          pip install pytest polars pydantic pydantic-settings click pyarrow pandas
+          pip install pytest polars pydantic pydantic-settings click pyarrow pandas yfinance requests
 
       - name: Run tests
         run: python -m pytest tests/ -v
