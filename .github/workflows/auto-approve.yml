@@ -1,0 +1,152 @@
+name: Auto-Approve Trivial Reviews
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request:
+    types: [synchronize]  # new commit pushed to PR
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  on-review:
+    # Triggered when CodeRabbit submits a review
+    if: |
+      github.event_name == 'pull_request_review' &&
+      github.event.review.user.login == 'coderabbitai[bot]' &&
+      github.event.review.state == 'changes_requested'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Handle CodeRabbit Review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAT_TOKEN: ${{ secrets.AUTO_APPROVE_PAT || '' }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          REVIEW=$(gh pr view "$PR" --repo "$REPO" --json reviews --jq '
+            [.reviews[] | select(.author.login == "coderabbitai[bot]")] | last
+          ')
+          REVIEW_BODY=$(echo "$REVIEW" | jq -r '.body')
+          # Get numeric review ID from REST API (GraphQL ID doesn't match pull_request_review_id)
+          REVIEW_ID=$(gh api "repos/$REPO/pulls/$PR/reviews" --jq '[.[] | select(.user.login == "coderabbitai[bot]")] | last | .id')
+
+          ACTIONABLE=$(echo "$REVIEW_BODY" | sed -n 's/.*\*\*Actionable comments posted: \([0-9]\{1,\}\).*/\1/p')
+          ACTIONABLE=${ACTIONABLE:-0}
+
+          # Parse severity from review inline comments
+          COMMENTS=$(gh api "repos/$REPO/pulls/$PR/comments" --jq '[.[] | select(.pull_request_review_id == '$REVIEW_ID') | .body] | join("\n")' 2>/dev/null || echo "")
+          MAJORS=$(echo "$COMMENTS" | grep -ciF "Major" || true)
+          MAJORS=${MAJORS:-0}
+          CRITICALS=$(echo "$COMMENTS" | grep -ciF "Critical" || true)
+          CRITICALS=${CRITICALS:-0}
+
+          echo "PR #$PR review: actionable=$ACTIONABLE majors=$MAJORS criticals=$CRITICALS"
+
+          # Use PAT for approve (GITHUB_TOKEN can't approve)
+          do_approve() {
+            if [ -n "$PAT_TOKEN" ]; then
+              GH_TOKEN="$PAT_TOKEN" gh pr review "$PR" --repo "$REPO" --approve --body "$1"
+            else
+              echo "WARNING: AUTO_APPROVE_PAT secret not set — cannot auto-approve."
+              echo "  Set up a fine-grained PAT with pull-requests:write scope."
+            fi
+          }
+
+          # 0 actionable → approve now
+          if [ "$ACTIONABLE" -eq 0 ]; then
+            echo "No actionable comments — approving."
+            do_approve "Auto-approved: no actionable findings."
+            exit 0
+          fi
+
+          # major/critical or > 2 trivial → reject (block merge)
+          if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ] || [ "$ACTIONABLE" -gt 2 ]; then
+            echo "Unacceptable findings — requesting changes."
+            gh pr review "$PR" --repo "$REPO" --request-changes \
+              --body "Auto-rejected: major/critical=$((MAJORS + CRITICALS)) actionable=$ACTIONABLE. Fix and close-reopen."
+            exit 0
+          fi
+
+          # ≤ 2 trivial/minor → wait for fix commit (handled by on-push job)
+          echo "≤ 2 trivial/minor — waiting for fix commit."
+
+  on-push:
+    # Triggered when a new commit is pushed to PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Auto-Approve After Fix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAT_TOKEN: ${{ secrets.AUTO_APPROVE_PAT || '' }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          do_approve() {
+            if [ -n "$PAT_TOKEN" ]; then
+              GH_TOKEN="$PAT_TOKEN" gh pr review "$PR" --repo "$REPO" --approve --body "$1"
+            else
+              echo "WARNING: AUTO_APPROVE_PAT secret not set — cannot auto-approve."
+            fi
+          }
+
+          # Find latest CodeRabbit review
+          REVIEW=$(gh pr view "$PR" --repo "$REPO" --json reviews --jq '
+            [.reviews[] | select(.author.login == "coderabbitai[bot]")] | last // empty
+          ')
+
+          if [ -z "$REVIEW" ]; then
+            echo "No CodeRabbit review yet — skipping."
+            exit 0
+          fi
+
+          REVIEW_STATE=$(echo "$REVIEW" | jq -r '.state')
+          if [ "$REVIEW_STATE" != "CHANGES_REQUESTED" ]; then
+            echo "Latest review is $REVIEW_STATE — skipping."
+            exit 0
+          fi
+
+          REVIEW_BODY=$(echo "$REVIEW" | jq -r '.body')
+          REVIEW_COMMIT=$(echo "$REVIEW" | jq -r '.commit.oid // ""')
+          # Get numeric review ID from REST API (GraphQL ID doesn't match pull_request_review_id)
+          REVIEW_ID=$(gh api "repos/$REPO/pulls/$PR/reviews" --jq '[.[] | select(.user.login == "coderabbitai[bot]")] | last | .id')
+
+          ACTIONABLE=$(echo "$REVIEW_BODY" | sed -n 's/.*\*\*Actionable comments posted: \([0-9]\{1,\}\).*/\1/p')
+          ACTIONABLE=${ACTIONABLE:-0}
+
+          COMMENTS=$(gh api "repos/$REPO/pulls/$PR/comments" --jq '[.[] | select(.pull_request_review_id == '$REVIEW_ID') | .body] | join("\n")' 2>/dev/null || echo "")
+          MAJORS=$(echo "$COMMENTS" | grep -ciF "Major" || true)
+          MAJORS=${MAJORS:-0}
+          CRITICALS=$(echo "$COMMENTS" | grep -ciF "Critical" || true)
+          CRITICALS=${CRITICALS:-0}
+
+          # Check if a new commit was pushed after review
+          PR_HEAD=$(gh pr view "$PR" --repo "$REPO" --json commits --jq '.commits[-1].oid // ""')
+          HAS_NEW_COMMIT="false"
+          if [ -n "$PR_HEAD" ] && [ -n "$REVIEW_COMMIT" ] && [ "$PR_HEAD" != "$REVIEW_COMMIT" ]; then
+            HAS_NEW_COMMIT="true"
+          fi
+
+          echo "PR #$PR push: actionable=$ACTIONABLE majors=$MAJORS criticals=$CRITICALS new_commit=$HAS_NEW_COMMIT"
+
+          if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ] || [ "$ACTIONABLE" -gt 2 ]; then
+            echo "Has major/critical or > 2 findings — skipping."
+            exit 0
+          fi
+
+          if [ "$HAS_NEW_COMMIT" = "true" ] && [ "$ACTIONABLE" -le 2 ]; then
+            echo "Fix commit pushed after trivial-only review — approving."
+            do_approve "Auto-approved: fix commit pushed, $ACTIONABLE trivial/minor finding(s)."
+            exit 0
+          fi
+
+          echo "No new fix commit yet — skipping."
