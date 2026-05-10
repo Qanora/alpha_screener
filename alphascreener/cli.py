@@ -119,7 +119,74 @@ def universe():
 @click.option("--top", default=20, help="Number of top picks to output")
 def screen(market: str, top: int):
     """Run a full market scan."""
-    click.echo(f"Screening {market} market for top {top} picks...")
+    from datetime import date, timedelta
+
+    from alphascreener.adapters.yfinance_adapter import YFinanceAdapter
+    from alphascreener.core.factors import compute_all_factors
+    from alphascreener.core.screening import (
+        DynamicThreshold,
+        compute_missing_rate,
+        phase1_hard_filter,
+        phase2_score,
+        standardize_factors,
+    )
+    from alphascreener.core.storage import DataStore
+
+    settings = get_settings()
+    store = DataStore()
+    today = date.today()
+    yf_adapter = YFinanceAdapter(rps=settings.yfinance_rps)
+
+    meta = store.read_universe_meta()
+    if meta is None:
+        click.echo("No universe data. Run 'alphascreener data sync' first.")
+        return
+
+    tickers = meta["ticker"].to_list()
+    click.echo(f"Universe: {len(tickers)} tickers")
+
+    click.echo("Loading OHLCV data...")
+    start = today - timedelta(days=120)
+    ohlcv = yf_adapter.fetch_ohlcv_batch(tickers, start, today)
+    if ohlcv.is_empty():
+        click.echo("No OHLCV data available.")
+        return
+
+    store.write_ohlcv(ohlcv, today)
+    click.echo(f"  {ohlcv.n_unique('ticker')} tickers, {len(ohlcv)} rows")
+
+    click.echo("Computing 13 factors...")
+    factor_df = compute_all_factors(ohlcv, tickers, yf_adapter)
+
+    missing_rate = compute_missing_rate(factor_df)
+    mask = missing_rate <= 0.30
+    factor_df = factor_df.filter(mask)
+    ticker_count = len(factor_df)
+    click.echo(f"  {ticker_count} tickers after missing data filter")
+
+    store.write_factors(factor_df, today)
+
+    threshold = DynamicThreshold()
+    phase1_df = phase1_hard_filter(factor_df, threshold._thresholds)
+    after_filter = len(phase1_df)
+    pass_rate = after_filter / max(ticker_count, 1)
+    adj_thresholds, status, action = threshold.evaluate(pass_rate, today)
+
+    click.echo(f"Phase 1: {after_filter} passed ({pass_rate:.1%}) [{status}, {action}]")
+
+    if phase1_df.is_empty():
+        click.echo("No tickers passed hard filter.")
+        return
+
+    z_df = standardize_factors(phase1_df)
+    scored = phase2_score(z_df)
+
+    top_n = scored.head(top)
+    click.echo(f"\nTop {min(top, len(top_n))} by Coarse_Score:")
+    for row in top_n.iter_rows(named=True):
+        click.echo(f"  {row['ticker']:8s}  Coarse_Score={row.get('coarse_score', 0):+.4f}")
+
+    store.write_signals(top_n, today, track="pure")
 
 
 @main.command()
