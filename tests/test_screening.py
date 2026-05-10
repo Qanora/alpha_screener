@@ -2,13 +2,16 @@
 
 from datetime import date, timedelta
 
+import pytest
 import polars as pl
 
 from alphascreener.core.screening import (
     DEFAULT_THRESHOLDS,
     FACTOR_WEIGHTS,
+    MISSING_SECTOR_INDUSTRY,
     DynamicThreshold,
     compute_missing_rate,
+    dedup_by_sector_industry,
     phase1_hard_filter,
     phase2_score,
     standardize_factors,
@@ -205,6 +208,148 @@ class TestDynamicThreshold:
         tomorrow = today + timedelta(days=1)
         thresholds2, status2, action2 = dt.evaluate(0.97, tomorrow)
         assert action2 == "widen"  # Still requests widen but cooldown prevents actual adjustment
+
+
+class TestDedupBySectorIndustry:
+    def test_basic_caps_enforced(self):
+        """Sector <= 3, Industry <= 2, greedy by coarse_score desc."""
+        df = pl.DataFrame(
+            {
+                "ticker": [f"T{i}" for i in range(10)],
+                "coarse_score": [0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45],
+                "sector": ["Tech"] * 5 + ["Finance"] * 5,
+                "industry": (
+                    ["Software"] * 3 + ["Hardware"] * 2 + ["Banks"] * 3 + ["Insurance"] * 2
+                ),
+            }
+        )
+        result = dedup_by_sector_industry(df, sector_cap=3, industry_cap=2, top_n=20)
+        assert len(result) == 6
+        tech_count = result.filter(pl.col("sector") == "Tech").height
+        finance_count = result.filter(pl.col("sector") == "Finance").height
+        assert tech_count <= 3
+        assert finance_count <= 3
+        software = result.filter(pl.col("industry") == "Software")
+        assert software.height <= 2
+
+    def test_top30_to_top20(self):
+        """30 candidates with varied sectors/industries dedup to at most 20."""
+        import random
+
+        random.seed(42)
+        sectors = ["Tech", "Finance", "Health", "Energy", "Consumer"]
+        industries = [f"Ind_{s}_{i}" for s in sectors for i in range(3)]
+        data = []
+        for i in range(30):
+            s = sectors[i % len(sectors)]
+            ind = industries[(i * 7) % len(industries)]
+            data.append(
+                {
+                    "ticker": f"T{i:02d}",
+                    "coarse_score": 1.0 - i * 0.01,
+                    "sector": s,
+                    "industry": ind,
+                }
+            )
+        df = pl.DataFrame(data)
+        result = dedup_by_sector_industry(df, sector_cap=3, industry_cap=2, top_n=20)
+        assert len(result) <= 20
+        # Verify caps
+        sector_counts = result.group_by("sector").len()
+        for row in sector_counts.iter_rows(named=True):
+            assert row["len"] <= 3, f"Sector {row['sector']} has {row['len']} > 3"
+        industry_counts = result.group_by("industry").len()
+        for row in industry_counts.iter_rows(named=True):
+            assert row["len"] <= 2, f"Industry {row['industry']} has {row['len']} > 2"
+
+    def test_fewer_than_30_input(self):
+        """Only 5 candidates — all should pass if caps allow."""
+        df = pl.DataFrame(
+            {
+                "ticker": ["A", "B", "C", "D", "E"],
+                "coarse_score": [0.5, 0.4, 0.3, 0.2, 0.1],
+                "sector": ["Tech", "Tech", "Finance", "Health", "Energy"],
+                "industry": ["SW", "SW", "Bank", "Bio", "Oil"],
+            }
+        )
+        result = dedup_by_sector_industry(df, sector_cap=3, industry_cap=2, top_n=20)
+        assert len(result) == 5
+
+    def test_scores_descending(self):
+        """Result must be sorted by coarse_score descending."""
+        df = pl.DataFrame(
+            {
+                "ticker": ["B", "A", "C"],
+                "coarse_score": [0.7, 0.9, 0.5],
+                "sector": ["Tech", "Tech", "Tech"],
+                "industry": ["SW", "HW", "SW"],
+            }
+        )
+        result = dedup_by_sector_industry(df, sector_cap=3, industry_cap=2, top_n=20)
+        scores = result["coarse_score"].to_list()
+        assert scores == sorted(scores, reverse=True)
+
+    def test_missing_sector_industry_treated_as_missing(self):
+        """None values in sector/industry are filled with MISSING_SECTOR_INDUSTRY sentinel."""
+        df = pl.DataFrame(
+            {
+                "ticker": ["A", "B", "C", "D"],
+                "coarse_score": [0.9, 0.8, 0.7, 0.6],
+                "sector": [None, None, "Tech", "Tech"],
+                "industry": [None, None, "SW", "SW"],
+            }
+        )
+        result = dedup_by_sector_industry(df, sector_cap=2, industry_cap=2, top_n=20)
+        assert len(result) == 4
+        missing = result.filter(pl.col("sector") == MISSING_SECTOR_INDUSTRY).height
+        assert missing == 2
+        # Real empty strings are not conflated with missing
+        assert MISSING_SECTOR_INDUSTRY == "<MISSING>"
+
+    def test_top_n_caps_output(self):
+        """top_n parameter limits total output even if caps would allow more."""
+        df = pl.DataFrame(
+            {
+                "ticker": [f"T{i}" for i in range(15)],
+                "coarse_score": [1.0 - i * 0.01 for i in range(15)],
+                "sector": [f"S{i % 5}" for i in range(15)],
+                "industry": [f"Ind_{i}" for i in range(15)],
+            }
+        )
+        result = dedup_by_sector_industry(df, sector_cap=3, industry_cap=2, top_n=5)
+        assert len(result) == 5
+
+    @pytest.mark.parametrize("bad", [0, -1, True, 1.5, "2"])
+    def test_invalid_sector_cap_raises(self, bad):
+        df = pl.DataFrame(
+            {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
+        )
+        with pytest.raises(ValueError, match="sector_cap"):
+            dedup_by_sector_industry(df, sector_cap=bad, industry_cap=2)
+
+    @pytest.mark.parametrize("bad", [0, True, 1.0, "x"])
+    def test_invalid_industry_cap_raises(self, bad):
+        df = pl.DataFrame(
+            {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
+        )
+        with pytest.raises(ValueError, match="industry_cap"):
+            dedup_by_sector_industry(df, sector_cap=2, industry_cap=bad)
+
+    @pytest.mark.parametrize("bad", [0, False, 2.0, "top"])
+    def test_invalid_top_n_raises(self, bad):
+        df = pl.DataFrame(
+            {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
+        )
+        with pytest.raises(ValueError, match="top_n"):
+            dedup_by_sector_industry(df, sector_cap=2, industry_cap=2, top_n=bad)
+
+    @pytest.mark.parametrize("missing_col", ["sector", "industry", "coarse_score"])
+    def test_missing_column_raises(self, missing_col):
+        data = {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
+        data.pop(missing_col)
+        df = pl.DataFrame(data)
+        with pytest.raises(KeyError, match=missing_col):
+            dedup_by_sector_industry(df, sector_cap=2, industry_cap=2)
 
 
 class TestFactorWeights:
