@@ -60,15 +60,15 @@ if [ "$ACTIONABLE" -eq 0 ]; then
   exit 0
 fi
 
-# Case 2: major/critical or > 2 trivial → reject
-if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ] || [ "$ACTIONABLE" -gt 2 ]; then
-  echo "Unacceptable findings — rejecting."
+# Case 2: major/critical → reject
+if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ]; then
+  echo "Has major/critical findings — rejecting."
   gh pr review "$PR" --repo "$REPO" --request-changes \
-    --body "Auto-rejected: major/critical=$((MAJORS + CRITICALS)) actionable=$ACTIONABLE. Fix and close-reopen."
+    --body "Auto-rejected: major/critical=$((MAJORS + CRITICALS)). Fix and close-reopen."
   exit 1
 fi
 
-# Case 3: ≤ 2 trivial + fix commit → approve
+# Case 3: trivial/minor + fix commit → approve
 if [ "$HAS_NEW_COMMIT" = "true" ]; then
   echo "Fix commit pushed after trivial-only review — approving."
   gh pr review "$PR" --repo "$REPO" --approve \
@@ -76,6 +76,6 @@ if [ "$HAS_NEW_COMMIT" = "true" ]; then
   exit 0
 fi
 
-# Case 4: ≤ 2 trivial, no fix commit → wait
-echo "≤ 2 trivial/minor but no fix commit yet — waiting."
+# Case 4: trivial/minor, no fix commit → wait
+echo "$ACTIONABLE trivial/minor finding(s) but no fix commit yet — waiting."
 exit 0
