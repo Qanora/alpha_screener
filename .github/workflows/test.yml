@@ -92,7 +92,16 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e . --no-deps
-          pip install pytest polars pydantic pydantic-settings click pyarrow pandas yfinance requests
+          # Extract runtime deps from pyproject.toml (skip tradingagents — numpy conflict)
+          python3 -c "
+          import tomllib
+          with open('pyproject.toml','rb') as f:
+              deps = tomllib.load(f)['project']['dependencies']
+          pkgs = [d for d in deps if 'tradingagents' not in d]
+          print(' '.join(pkgs))
+          " | xargs pip install
+          # Dev deps for testing
+          pip install pytest
 
       - name: Run tests
         run: python -m pytest tests/ -v
