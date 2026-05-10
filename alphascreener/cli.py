@@ -115,10 +115,11 @@ def universe():
 
 
 @main.command()
-@click.option("--market", default="US", help="Target market (US)")
 @click.option("--top", default=20, help="Number of top picks to output")
-def screen(market: str, top: int):
+def screen(top: int):
     """Run a full market scan."""
+    if isinstance(top, bool) or not isinstance(top, int) or top < 1:
+        raise click.BadParameter(f"top must be a positive integer, got {top!r}")
     from datetime import date, timedelta
 
     from alphascreener.adapters.yfinance_adapter import YFinanceAdapter
@@ -127,6 +128,7 @@ def screen(market: str, top: int):
         MISSING_RATE_MAX,
         DynamicThreshold,
         compute_missing_rate,
+        dedup_by_sector_industry,
         phase1_hard_filter,
         phase2_score,
         standardize_factors,
@@ -184,7 +186,20 @@ def screen(market: str, top: int):
     z_df = standardize_factors(phase1_df)
     scored = phase2_score(z_df)
 
-    top_n = scored.head(top)
+    if "sector" in meta.columns and "industry" in meta.columns:
+        scored = scored.join(
+            meta.select(["ticker", "sector", "industry"]),
+            on="ticker",
+            how="left",
+        )
+        top_n = dedup_by_sector_industry(
+            scored,
+            sector_cap=settings.sector_cap,
+            industry_cap=settings.industry_cap,
+            top_n=top,
+        )
+    else:
+        top_n = scored.head(top)
     click.echo(f"\nTop {min(top, len(top_n))} by Coarse_Score:")
     for row in top_n.iter_rows(named=True):
         click.echo(f"  {row['ticker']:8s}  Coarse_Score={row.get('coarse_score', 0):+.4f}")

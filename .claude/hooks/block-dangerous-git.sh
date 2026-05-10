@@ -22,22 +22,26 @@ for pattern in "${DANGEROUS_PATTERNS[@]}"; do
   fi
 done
 
-# git push: allow non-master branches, block master/main and bare push
-if echo "$COMMAND" | grep -qE '^git push'; then
-  # Block push --force to any branch
-  if echo "$COMMAND" | grep -qE 'push.*--force'; then
+# Only check git push commands (strip leading path and git config flags)
+PUSH_CMD=$(echo "$COMMAND" | sed 's/ *2>&1 *$//; s/ *>[^ ]* *$//; s|^.*/git |git |; s/^git\( -[cC] [^ ]*\)\+/git /')
+if echo "$PUSH_CMD" | grep -qE '^git push'; then
+
+  if echo "$PUSH_CMD" | grep -qE '(&&|;)\s*git\s+push|git\s+push.*(&&|;)'; then
+    echo "BLOCKED: command chaining with git push is not allowed." >&2
+    exit 2
+  fi
+
+  if echo "$PUSH_CMD" | grep -qE 'git[[:space:]]+push.*(--force|-f)'; then
     echo "BLOCKED: git push --force is forbidden." >&2
     exit 2
   fi
 
-  # Block push without a branch spec (defaults to current branch, risky)
-  if ! echo "$COMMAND" | grep -qE 'git push .* origin '; then
-    echo "BLOCKED: git push without explicit branch. Use 'git push origin <branch>'." >&2
+  if ! echo "$PUSH_CMD" | grep -qE 'git[[:space:]]+push([[:space:]]+-u)?[[:space:]]+origin[[:space:]]+feature/[^[:space:]:]+$'; then
+    echo "BLOCKED: only 'git push origin feature/<name>' is allowed." >&2
     exit 2
   fi
 
-  # Block push to master or main
-  if echo "$COMMAND" | grep -qE 'git push .* (master|main)'; then
+  if echo "$PUSH_CMD" | grep -qE 'git[[:space:]]+push([[:space:]]+-u)?[[:space:]]+origin[[:space:]]+(master|main|refs/heads/master|refs/heads/main|([^[:space:]:]+:)?(master|main))$'; then
     echo "BLOCKED: git push to master/main is forbidden. Use feature branches + PR." >&2
     exit 2
   fi
