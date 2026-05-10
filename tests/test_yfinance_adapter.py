@@ -54,7 +54,6 @@ class TestYFinanceAdapter:
     def test_fetch_ticker_info_returns_dict(self):
         adapter = YFinanceAdapter()
         info = adapter.fetch_ticker_info("AAPL")
-        assert isinstance(info, dict)
         assert isinstance(info, dict) and len(info) > 0
         assert "symbol" in info or "shortName" in info
 
