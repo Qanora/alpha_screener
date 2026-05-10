@@ -55,16 +55,15 @@ bash scripts/watch-pr.sh <N>
 | 情况 | 处理 |
 |------|------|
 | 0 findings | 等 CI → auto-merge（bot 自动 approve） |
-| major=0 AND critical=0 AND ≤ 2 trivial/minor | 修 → commit → push 同分支 → bot 自动 approve → merge |
-| ≥ 1 major/critical 或 > 2 trivial | 修 → amend → `close-reopen.sh` |
+| major=0 AND critical=0 AND trivial/minor ≤ 2 | 修 → commit → push 同分支 → bot 自动 approve → merge |
+| ≥ 1 major/critical 或 trivial/minor > 2 | 修 → amend → `close-reopen.sh` |
 
 ```bash
-# 只有 trivial：正常 commit 推同分支，不用关旧开新
+# ≤ 2 trivial/minor：正常 commit 推同分支，不用关旧开新，bot 自动 approve
 git add -A && git commit -m "fix: address trivial review findings (#N)"
 git push origin feature/<name>
-gh pr merge <N> --squash --auto
 
-# 有 major/critical：修 → amend → 关旧开新
+# major/critical > 0 或 trivial/minor > 2：修 → amend → 关旧开新
 bash scripts/close-reopen.sh <old-N> <old-branch>
 bash scripts/watch-pr.sh <new-N>
 ```
