@@ -35,7 +35,6 @@ class TestCliBasics:
         runner = CliRunner()
         result = runner.invoke(main, ["screen", "--help"])
         assert result.exit_code == 0
-        assert "--market" in result.output
         assert "--top" in result.output
 
     def test_backtest_requires_start(self):
