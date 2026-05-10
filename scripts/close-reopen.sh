@@ -73,22 +73,16 @@ fi
 # 保存原始 ref，以便冲突时恢复
 ORIG_REF=$(git symbolic-ref --quiet --short HEAD || git rev-parse HEAD)
 
-# 直接从 origin/master 创建新分支，基于本地旧分支 squash
-# 使用本地分支（非 origin/）因为 amend 后的修复尚未 push 到 remote
-git checkout -b "$NEW_BRANCH" origin/master
-git merge --squash "$OLD_BRANCH"
-
-# 检测 squash merge 是否产生冲突（squash 不支持 git merge --abort）
-if git diff --name-only --diff-filter=U | grep -q .; then
-  echo "ERROR: squash merge produced conflicts — aborting"
-  git reset --hard
-  git checkout -B master origin/master
-  git branch -D "$NEW_BRANCH" 2>/dev/null || true
-  if ! git checkout --force "$ORIG_REF" 2>/dev/null; then
-    echo "  (Could not restore original ref — you are now on master)"
-  fi
+# 先将旧分支 rebase 到最新 master，避免后续 squash 冲突
+git checkout "$OLD_BRANCH"
+if ! git rebase origin/master; then
+  echo "ERROR: rebase conflict — resolve manually then re-run, or: git rebase --abort"
   exit 1
 fi
+
+# 从 origin/master 创建新分支，squash merge 已 rebase 的旧分支
+git checkout -b "$NEW_BRANCH" origin/master
+git merge --squash "$OLD_BRANCH"
 
 # 检测 squash 是否产生了变更（可能旧分支内容已完全合并）
 if git diff --cached --quiet && git diff --quiet; then

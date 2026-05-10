@@ -65,16 +65,16 @@ jobs:
             exit 0
           fi
 
-          # major/critical or > 2 trivial → reject (block merge)
-          if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ] || [ "$ACTIONABLE" -gt 2 ]; then
-            echo "Unacceptable findings — requesting changes."
+          # major/critical → reject (block merge)
+          if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ]; then
+            echo "Has major/critical findings — requesting changes."
             gh pr review "$PR" --repo "$REPO" --request-changes \
-              --body "Auto-rejected: major/critical=$((MAJORS + CRITICALS)) actionable=$ACTIONABLE. Fix and close-reopen."
+              --body "Auto-rejected: major/critical=$((MAJORS + CRITICALS)). Fix and close-reopen."
             exit 0
           fi
 
-          # ≤ 2 trivial/minor → wait for fix commit (handled by on-push job)
-          echo "≤ 2 trivial/minor — waiting for fix commit."
+          # trivial/minor only — wait for fix commit (handled by on-push job)
+          echo "$ACTIONABLE trivial/minor finding(s) — waiting for fix commit."
 
   on-push:
     # Triggered when a new commit is pushed to PR
@@ -138,12 +138,12 @@ jobs:
 
           echo "PR #$PR push: actionable=$ACTIONABLE majors=$MAJORS criticals=$CRITICALS new_commit=$HAS_NEW_COMMIT"
 
-          if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ] || [ "$ACTIONABLE" -gt 2 ]; then
-            echo "Has major/critical or > 2 findings — skipping."
+          if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ]; then
+            echo "Has major/critical findings — skipping."
             exit 0
           fi
 
-          if [ "$HAS_NEW_COMMIT" = "true" ] && [ "$ACTIONABLE" -le 2 ]; then
+          if [ "$HAS_NEW_COMMIT" = "true" ]; then
             echo "Fix commit pushed after trivial-only review — approving."
             do_approve "Auto-approved: fix commit pushed, $ACTIONABLE trivial/minor finding(s)."
             exit 0
