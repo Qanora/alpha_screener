@@ -99,9 +99,10 @@ jobs:
           import tomllib
           with open('pyproject.toml','rb') as f:
               deps = tomllib.load(f)['project']['dependencies']
-          pkgs = [d for d in deps if 'tradingagents' not in d]
-          print(' '.join(pkgs))
-          " | xargs pip install
+          for d in deps:
+              if 'tradingagents' not in d:
+                  print(d)
+          " | xargs -d '\n' pip install
           # Dev deps for testing
           pip install pytest
 

@@ -53,4 +53,5 @@ gh pr create --title "..." --body "..." --base master
 ### Guardrails
 
 - `git push` 被 `.claude/hooks/block-dangerous-git.sh` 拦截：只允许 `git push origin <feature-branch>`，禁止 master/main、force push
-- 遇到冲突时用新分支方式，重启 PR```
+- 遇到冲突时用新分支方式，重启 PR
+```
