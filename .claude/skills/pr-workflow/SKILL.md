@@ -54,24 +54,28 @@ bash scripts/watch-pr.sh <N>
 
 | 情况 | 处理 |
 |------|------|
-| 0 findings | 等 CI 通过 → auto-merge |
-| ≥ 1 major/critical | 修 → amend → `close-reopen.sh` |
-| 只有 trivial/minor (≤ 2, 0 major) | 修 → 新 commit → push 同分支 → merge |
+| 0 findings | 等 CI → auto-merge（bot 自动 approve） |
+| major=0 AND critical=0 AND trivial/minor ≤ 2 | 修 → commit → push 同分支 → bot 自动 approve → merge |
+| ≥ 1 major/critical 或 trivial/minor > 2 | 修 → amend → `close-reopen.sh` |
 
 ```bash
-# 只有 trivial：正常 commit 推同分支，不用关旧开新
+# ≤ 2 trivial/minor：正常 commit 推同分支，不用关旧开新，bot 自动 approve
 git add -A && git commit -m "fix: address trivial review findings (#N)"
 git push origin feature/<name>
-gh pr merge <N> --squash --auto
 
-# 有 major/critical：修 → amend → 关旧开新
+# major/critical > 0 或 trivial/minor > 2：修 → amend → 关旧开新
 bash scripts/close-reopen.sh <old-N> <old-branch>
 bash scripts/watch-pr.sh <new-N>
 ```
 
 **与 master 冲突** → 同上（新分支从 master 创建后 squash merge 旧分支）。
 
-**Bot 无响应** → 等。若超 20 分钟仍是 REVIEW_REQUIRED → 关旧开新。
+**Bot 无响应** → 等 CI。若超 20 分钟仍是 REVIEW_REQUIRED（bot 不触发）→ 关旧开新。
+
+**Auto-Approve Bot**（`.github/workflows/auto-approve.yml`）:
+- 监听 CodeRabbit review 和 push 事件
+- 符合 trivial 条件 → 自动 approve → auto-merge
+- 不符合条件（major/critical 或 > 2 trivial/minor）→ 自动 request-changes 阻塞 merge
 
 ## 速查
 
@@ -81,5 +85,6 @@ bash scripts/watch-pr.sh <new-N>
 | CI test ImportError | pyproject.toml 动态提取 deps |
 | 网络测试 CI 失败 | `@pytest.mark.network` |
 | Bot 不 approve | `.coderabbit.yaml`: `assertive` + `request_changes_workflow` |
+| Bot trivial review 阻塞 merge | Auto-Approve workflow 自动 approve（`.github/workflows/auto-approve.yml`） |
 
 见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)

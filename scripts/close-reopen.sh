@@ -67,7 +67,7 @@ LOCAL_MASTER=$(git rev-parse master 2>/dev/null || echo "")
 REMOTE_MASTER=$(git rev-parse origin/master)
 if [ -n "$LOCAL_MASTER" ] && [ "$LOCAL_MASTER" != "$REMOTE_MASTER" ]; then
   echo "WARNING: local master ($LOCAL_MASTER) differs from origin/master ($REMOTE_MASTER)"
-  echo "  close-reopen.sh will reset local master to origin/master"
+  echo "  If errors occur, local master will be reset to origin/master during cleanup"
 fi
 
 # 保存原始 ref，以便冲突时恢复
@@ -84,7 +84,9 @@ if git diff --name-only --diff-filter=U | grep -q .; then
   git reset --hard
   git checkout -B master origin/master
   git branch -D "$NEW_BRANCH" 2>/dev/null || true
-  git checkout --force "$ORIG_REF" 2>/dev/null || true
+  if ! git checkout --force "$ORIG_REF" 2>/dev/null; then
+    echo "  (Could not restore original ref — you are now on master)"
+  fi
   exit 1
 fi
 
@@ -97,7 +99,9 @@ if git diff --cached --quiet && git diff --quiet; then
 fi
 
 # 恢复 guardrails hook（squash merge 可能丢失此文件的最新版本）
-git checkout "$OLD_BRANCH" -- .claude/hooks/block-dangerous-git.sh 2>/dev/null || true
+if git checkout "$OLD_BRANCH" -- .claude/hooks/block-dangerous-git.sh 2>/dev/null; then
+  echo "Restored guardrails hook from $OLD_BRANCH"
+fi
 
 COMMIT_MSG=$(git log -1 --pretty=format:'%s' "$OLD_BRANCH")
 git commit -m "$COMMIT_MSG"
@@ -108,7 +112,7 @@ git push origin "$NEW_BRANCH"
 # 先创建新 PR，成功后再关闭旧 PR 和删除旧分支
 TITLE="$COMMIT_MSG"
 echo "Creating new PR..."
-NEW_PR=$(gh pr create --repo "$REPO" --title "$TITLE" --body "1 commit." --base master)
+NEW_PR=$(gh pr create --repo "$REPO" --title "$TITLE" --body "Replaces PR #$OLD_PR." --base master)
 echo "New PR: $NEW_PR"
 echo "Monitor with: bash scripts/watch-pr.sh ${NEW_PR##*/}"
 
