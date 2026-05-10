@@ -22,9 +22,9 @@ for pattern in "${DANGEROUS_PATTERNS[@]}"; do
   fi
 done
 
-# Only check git push commands
-if echo "$COMMAND" | grep -qE '^git push'; then
-  PUSH_CMD=$(echo "$COMMAND" | sed 's/ *2>&1 *$//; s/ *>[^ ]* *$//')
+# Only check git push commands (strip leading path and git config flags)
+PUSH_CMD=$(echo "$COMMAND" | sed 's/ *2>&1 *$//; s/ *>[^ ]* *$//; s|^.*/git |git |; s/^git -[cC] [^ ]* //')
+if echo "$PUSH_CMD" | grep -qE '^git push'; then
 
   if echo "$PUSH_CMD" | grep -qE '(&&|;)\s*git\s+push|git\s+push.*(&&|;)'; then
     echo "BLOCKED: command chaining with git push is not allowed." >&2
