@@ -23,6 +23,7 @@ jobs:
       - name: Handle CodeRabbit Review
         env:
           GH_TOKEN: ${{ github.token }}
+          PAT_TOKEN: ${{ secrets.AUTO_APPROVE_PAT || '' }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
@@ -40,11 +41,20 @@ jobs:
 
           echo "PR #$PR review: actionable=$ACTIONABLE majors=$MAJORS criticals=$CRITICALS"
 
+          # Use PAT for approve (GITHUB_TOKEN can't approve)
+          do_approve() {
+            if [ -n "$PAT_TOKEN" ]; then
+              GH_TOKEN="$PAT_TOKEN" gh pr review "$PR" --repo "$REPO" --approve --body "$1"
+            else
+              echo "WARNING: AUTO_APPROVE_PAT secret not set — cannot auto-approve."
+              echo "  Set up a fine-grained PAT with pull-requests:write scope."
+            fi
+          }
+
           # 0 actionable → approve now
           if [ "$ACTIONABLE" -eq 0 ]; then
             echo "No actionable comments — approving."
-            gh pr review "$PR" --repo "$REPO" --approve \
-              --body "Auto-approved: no actionable findings."
+            do_approve "Auto-approved: no actionable findings."
             exit 0
           fi
 
@@ -68,10 +78,19 @@ jobs:
       - name: Auto-Approve After Fix
         env:
           GH_TOKEN: ${{ github.token }}
+          PAT_TOKEN: ${{ secrets.AUTO_APPROVE_PAT || '' }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+
+          do_approve() {
+            if [ -n "$PAT_TOKEN" ]; then
+              GH_TOKEN="$PAT_TOKEN" gh pr review "$PR" --repo "$REPO" --approve --body "$1"
+            else
+              echo "WARNING: AUTO_APPROVE_PAT secret not set — cannot auto-approve."
+            fi
+          }
 
           # Find latest CodeRabbit review
           REVIEW=$(gh pr view "$PR" --repo "$REPO" --json reviews --jq '
@@ -113,8 +132,7 @@ jobs:
 
           if [ "$HAS_NEW_COMMIT" = "true" ] && [ "$ACTIONABLE" -le 2 ]; then
             echo "Fix commit pushed after trivial-only review — approving."
-            gh pr review "$PR" --repo "$REPO" --approve \
-              --body "Auto-approved: fix commit pushed, $ACTIONABLE trivial/minor finding(s)."
+            do_approve "Auto-approved: fix commit pushed, $ACTIONABLE trivial/minor finding(s)."
             exit 0
           fi
 
