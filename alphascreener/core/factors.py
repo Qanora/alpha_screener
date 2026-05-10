@@ -14,7 +14,7 @@ from alphascreener.adapters.yfinance_adapter import YFinanceAdapter
 
 logger = logging.getLogger(__name__)
 
-LOOKBACK_DAYS = 90
+MAX_LOOKBACK = 210
 MOM_SLOPE_WINDOW = 10
 PTH_WINDOW = 63
 BB_WINDOW = 60
@@ -92,9 +92,11 @@ def compute_all_factors(
         factor_values["rsi_oversold"] = _rsi_oversold(close)
         factor_values["macd_cross"] = _macd_cross(close)
         factor_values["golden_cross"] = _golden_cross(close)
+        ticker_info = yf_adapter.fetch_ticker_info(ticker)
+
         factor_values["pead_flag"] = _pead_flag(ticker, yf_adapter)
-        factor_values["insider_buy"] = _insider_buy(ticker, yf_adapter)
-        factor_values["rev_accel"] = _rev_accel(ticker, yf_adapter)
+        factor_values["insider_buy"] = _insider_buy(ticker_info)
+        factor_values["rev_accel"] = _rev_accel(ticker_info)
 
         results.append(factor_values)
 
@@ -264,8 +266,7 @@ def _pead_flag(ticker: str, adapter: YFinanceAdapter) -> int:
     return 1 if any(cutoff <= d <= today for d in earnings_dates) else 0
 
 
-def _insider_buy(ticker: str, adapter: YFinanceAdapter) -> float:
-    info = adapter.fetch_ticker_info(ticker)
+def _insider_buy(info: dict) -> float:
     insider_pct = info.get("insiderPercentHeld") or info.get("heldPercentInsiders")
     if insider_pct is None:
         return 0.0
@@ -275,8 +276,7 @@ def _insider_buy(ticker: str, adapter: YFinanceAdapter) -> float:
     return float(insider_pct)
 
 
-def _rev_accel(ticker: str, adapter: YFinanceAdapter) -> float:
-    info = adapter.fetch_ticker_info(ticker)
+def _rev_accel(info: dict) -> float:
     q_growth = info.get("revenueGrowth")
     if q_growth is None:
         return 0.0

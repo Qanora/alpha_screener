@@ -25,6 +25,15 @@ FACTOR_WEIGHTS = {
     "rev_accel": 0.035,
 }
 
+Z_SCORE_CLIP = 3.0
+Z_SCORE_SCALE = 50.0 / 3.0
+MISSING_RATE_MAX = 0.30
+PASS_RATE_MIN = 0.70
+PASS_RATE_NORMAL_LO = 0.80
+PASS_RATE_NORMAL_HI = 0.92
+PASS_RATE_TIGHT = 0.95
+PASS_RATE_VERY_TIGHT = 0.98
+
 DEFAULT_THRESHOLDS = {
     "mom_5d_min": 0.0,
     "mfi_14_min": 40.0,
@@ -49,8 +58,8 @@ def standardize_factors(factor_df: pl.DataFrame) -> pl.DataFrame:
             continue
 
         z = (col - mean) / std
-        z_capped = z.clip(-3.0, 3.0)
-        score = 50.0 + z_capped * (50.0 / 3.0)
+        z_capped = z.clip(-Z_SCORE_CLIP, Z_SCORE_CLIP)
+        score = 50.0 + z_capped * Z_SCORE_SCALE
         result = result.with_columns(z_capped.alias(f"z_{col_name}"))
         result = result.with_columns(score.alias(f"score_{col_name}"))
 
@@ -126,6 +135,10 @@ class DynamicThreshold:
         self._thresholds = DEFAULT_THRESHOLDS.copy()
 
     @property
+    def thresholds(self) -> dict:
+        return self._thresholds.copy()
+
+    @property
     def cooldown_days(self) -> int:
         return 3
 
@@ -141,15 +154,15 @@ class DynamicThreshold:
         if pass_rate is None or pass_rate == 0:
             return self._thresholds.copy(), "unknown", "none"
 
-        if 0.80 <= pass_rate <= 0.92:
+        if PASS_RATE_NORMAL_LO <= pass_rate <= PASS_RATE_NORMAL_HI:
             status, action = "normal", "none"
-        elif 0.92 < pass_rate <= 0.95:
+        elif PASS_RATE_NORMAL_HI < pass_rate <= PASS_RATE_TIGHT:
             status, action = "tight", "warn"
-        elif 0.95 < pass_rate <= 0.98:
+        elif PASS_RATE_TIGHT < pass_rate <= PASS_RATE_VERY_TIGHT:
             status, action = "very_tight", "widen"
-        elif pass_rate > 0.98:
+        elif pass_rate > PASS_RATE_VERY_TIGHT:
             status, action = "extreme", "extreme_widen"
-        elif pass_rate < 0.70:
+        elif pass_rate < PASS_RATE_MIN:
             status, action = "loose", "tighten"
         else:
             status, action = "normal", "none"

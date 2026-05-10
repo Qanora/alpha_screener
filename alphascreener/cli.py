@@ -124,6 +124,7 @@ def screen(market: str, top: int):
     from alphascreener.adapters.yfinance_adapter import YFinanceAdapter
     from alphascreener.core.factors import compute_all_factors
     from alphascreener.core.screening import (
+        MISSING_RATE_MAX,
         DynamicThreshold,
         compute_missing_rate,
         phase1_hard_filter,
@@ -146,7 +147,9 @@ def screen(market: str, top: int):
     click.echo(f"Universe: {len(tickers)} tickers")
 
     click.echo("Loading OHLCV data...")
-    start = today - timedelta(days=120)
+    from alphascreener.core.factors import MAX_LOOKBACK
+
+    start = today - timedelta(days=MAX_LOOKBACK)
     ohlcv = yf_adapter.fetch_ohlcv_batch(tickers, start, today)
     if ohlcv.is_empty():
         click.echo("No OHLCV data available.")
@@ -159,7 +162,7 @@ def screen(market: str, top: int):
     factor_df = compute_all_factors(ohlcv, tickers, yf_adapter)
 
     missing_rate = compute_missing_rate(factor_df)
-    mask = missing_rate <= 0.30
+    mask = missing_rate <= MISSING_RATE_MAX
     factor_df = factor_df.filter(mask)
     ticker_count = len(factor_df)
     click.echo(f"  {ticker_count} tickers after missing data filter")
@@ -167,7 +170,7 @@ def screen(market: str, top: int):
     store.write_factors(factor_df, today)
 
     threshold = DynamicThreshold()
-    phase1_df = phase1_hard_filter(factor_df, threshold._thresholds)
+    phase1_df = phase1_hard_filter(factor_df, threshold.thresholds)
     after_filter = len(phase1_df)
     pass_rate = after_filter / max(ticker_count, 1)
     adj_thresholds, status, action = threshold.evaluate(pass_rate, today)
