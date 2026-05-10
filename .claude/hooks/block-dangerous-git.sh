@@ -22,22 +22,24 @@ for pattern in "${DANGEROUS_PATTERNS[@]}"; do
   fi
 done
 
-# git push: allow non-master branches, block master/main and bare push
-if echo "$COMMAND" | grep -qE '^git push'; then
+# git push: allow feature branches, block master/main and bare push
+# Strip trailing redirects before checking
+PUSH_CMD=$(echo "$COMMAND" | sed 's/ *2>&1 *$//; s/ *>[^ ]* *$//')
+if echo "$PUSH_CMD" | grep -qE '^git push'; then
   # Block push --force to any branch
-  if echo "$COMMAND" | grep -qE 'push.*--force'; then
+  if echo "$PUSH_CMD" | grep -qE 'push.*--force'; then
     echo "BLOCKED: git push --force is forbidden." >&2
     exit 2
   fi
 
   # Only allow: git push origin feature/<name> (with optional -u flag)
-  if ! echo "$COMMAND" | grep -qE '^git push( -u)? origin feature/[^[:space:]:]+$'; then
+  if ! echo "$PUSH_CMD" | grep -qE '^git push( -u)? origin feature/[^[:space:]:]+$'; then
     echo "BLOCKED: only 'git push origin feature/<name>' is allowed." >&2
     exit 2
   fi
 
   # Block push to master or main (including refs/heads/* and HEAD:* refspecs)
-  if echo "$COMMAND" | grep -qE '^git push( -u)? origin (master|main|refs/heads/master|refs/heads/main|([^[:space:]:]+:)?(master|main))$'; then
+  if echo "$PUSH_CMD" | grep -qE '^git push( -u)? origin (master|main|refs/heads/master|refs/heads/main|([^[:space:]:]+:)?(master|main))$'; then
     echo "BLOCKED: git push to master/main is forbidden. Use feature branches + PR." >&2
     exit 2
   fi
