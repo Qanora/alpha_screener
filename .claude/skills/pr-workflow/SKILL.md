@@ -34,6 +34,16 @@ gh pr create --title "..." --body "..." --base master
 bash scripts/watch-pr.sh <N>
 ```
 
+### 4. 收尾
+
+Monitor 以 `MERGED` 退出后，清理本地：
+
+```bash
+git checkout master && git pull origin master && git branch -D feature/<name>
+```
+
+> 注意：squash merge 后 `-d` 会失败（commit 未被直接合并），需用 `-D` 强制删除本地分支。
+
 ## Git 约束
 
 - commit 必须关联 `#N`
