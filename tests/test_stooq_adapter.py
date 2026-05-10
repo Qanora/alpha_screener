@@ -59,6 +59,7 @@ class TestCrossValidator:
         result = validator.validate(empty_df, ["AAPL"], today)
         assert result.is_empty()
 
+    @pytest.mark.network
     def test_validate_no_stooq_data(self):
         stooq = StooqAdapter()
         validator = CrossValidator(stooq)

@@ -23,7 +23,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # Check all required CI checks are passing
-          STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup -q '.statusCheckRollup[] | select(.status == "COMPLETED" and .conclusion != "SUCCESS" and .conclusion != "SKIPPED") | .name')
+          STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup -q '.statusCheckRollup[] | select(.status != "COMPLETED" or (.status == "COMPLETED" and .conclusion != "SUCCESS" and .conclusion != "SKIPPED")) | .name')
 
           if [ -n "$STATUS" ]; then
             echo "Some checks still failing or pending:"
