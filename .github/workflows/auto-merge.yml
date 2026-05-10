@@ -22,7 +22,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          # Check all required CI checks are passing
+          CHECK_COUNT=$(gh pr view "$PR_NUMBER" --json statusCheckRollup -q '.statusCheckRollup | length')
+          if [ "$CHECK_COUNT" -eq 0 ]; then
+            echo "No CI checks found yet. Aborting auto-merge."
+            exit 0
+          fi
+
           STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup -q '.statusCheckRollup[] | select(.status != "COMPLETED" or (.status == "COMPLETED" and .conclusion != "SUCCESS" and .conclusion != "SKIPPED")) | .name')
 
           if [ -n "$STATUS" ]; then

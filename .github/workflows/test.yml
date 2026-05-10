@@ -103,7 +103,7 @@ jobs:
               deps = data.get('project', {}).get('dependencies', [])
               if not deps:
                   sys.exit('ERROR: No dependencies found in pyproject.toml')
-          except (OSError, KeyError) as e:
+          except (OSError, KeyError, Exception) as e:
               sys.exit(f'ERROR: Failed to read pyproject.toml: {e}')
           for d in deps:
               if 'tradingagents' not in d:
