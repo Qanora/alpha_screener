@@ -118,6 +118,8 @@ def universe():
 @click.option("--top", default=20, help="Number of top picks to output")
 def screen(top: int):
     """Run a full market scan."""
+    if not isinstance(top, int) or top < 1:
+        raise click.BadParameter(f"top must be a positive integer, got {top!r}")
     from datetime import date, timedelta
 
     from alphascreener.adapters.yfinance_adapter import YFinanceAdapter
