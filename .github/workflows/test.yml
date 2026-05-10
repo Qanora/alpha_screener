@@ -23,7 +23,7 @@ jobs:
         with:
           config-path: .gitleaks.toml
 
-  pre-commit:
+  lint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -31,10 +31,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install pre-commit
-        run: pip install pre-commit mypy
-      - name: Run all hooks
-        run: pre-commit run --all-files --show-diff-on-failure
+      - name: Install tools
+        run: pip install ruff "mypy>=1.15,<2" types-requests
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy alphascreener/
+      - run: mypy tests/
 
   bandit:
     runs-on: ubuntu-latest
@@ -92,7 +94,23 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e . --no-deps
-          pip install pytest polars pydantic pydantic-settings click pyarrow pandas
+          # Extract runtime deps from pyproject.toml (skip tradingagents — numpy conflict)
+          python3 -c "
+          import sys, tomllib
+          try:
+              with open('pyproject.toml','rb') as f:
+                  data = tomllib.load(f)
+              deps = data.get('project', {}).get('dependencies', [])
+              if not deps:
+                  sys.exit('ERROR: No dependencies found in pyproject.toml')
+          except (OSError, KeyError) as e:
+              sys.exit(f'ERROR: Failed to read pyproject.toml: {e}')
+          for d in deps:
+              if 'tradingagents' not in d:
+                  print(d)
+          " | xargs -d '\n' pip install
+          # Dev deps for testing
+          pip install pytest
 
       - name: Run tests
         run: python -m pytest tests/ -v
