@@ -125,5 +125,8 @@ def get_db(db_path: Path):
     try:
         yield conn
     finally:
-        conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        try:
+            conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except sqlite3.OperationalError:
+            pass
         conn.close()

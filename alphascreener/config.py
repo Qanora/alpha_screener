@@ -4,10 +4,11 @@ import functools
 from pathlib import Path
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
     primary_data_source: str = "yfinance"
     fallback_ohlcv_source: str = "stooq"
     fmp_tier: str = "free"
@@ -17,6 +18,9 @@ class Settings(BaseSettings):
     llm_rps: int = 5
     llm_batch_size: int = 3
     llm_max_concurrent_stage1: int = 6
+
+    yfinance_rps: int = 5
+    yfinance_batch_size: int = 50
 
     cost_l1_warning_daily_usd: float = 0.80
     cost_l2_degrade_daily_usd: float = 1.00
@@ -50,9 +54,6 @@ class Settings(BaseSettings):
     @property
     def db_path(self) -> Path:
         return self.home / "db" / "metadata.db"
-
-    class Config:
-        env_file = ".env"
 
 
 @functools.lru_cache
