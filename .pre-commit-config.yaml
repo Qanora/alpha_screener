@@ -22,3 +22,9 @@ repos:
         language: system
         types: [python]
         pass_filenames: true
+
+      - id: require-issue-ref
+        name: Require issue reference in commit message
+        entry: scripts/commit-msg
+        language: script
+        stages: [commit-msg]
