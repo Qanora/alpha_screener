@@ -70,7 +70,12 @@ bash scripts/watch-pr.sh <new-N>
 
 **与 master 冲突** → 同上（新分支从 master 创建后 squash merge 旧分支）。
 
-**Bot 无响应** → 等。若超 20 分钟仍是 REVIEW_REQUIRED → 关旧开新。
+**Bot 无响应** → 等 CI。若超 20 分钟仍是 REVIEW_REQUIRED（bot 不触发）→ 关旧开新。
+
+**Auto-Approve Bot**（`.github/workflows/auto-approve.yml`）:
+- 监听 CodeRabbit review 和 push 事件
+- 符合 trivial 条件 → 自动 approve → auto-merge
+- 不符合条件（major/critical 或 > 2 trivial/minor）→ 自动 request-changes 阻塞 merge
 
 ## 速查
 
