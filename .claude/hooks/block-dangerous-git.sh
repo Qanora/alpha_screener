@@ -30,9 +30,9 @@ if echo "$COMMAND" | grep -qE '^git push'; then
     exit 2
   fi
 
-  # Only allow: git push origin <branch> (with optional -u flag)
-  if ! echo "$COMMAND" | grep -qE '^git push( -u)? origin [^[:space:]:]+$'; then
-    echo "BLOCKED: git push without explicit branch. Use 'git push origin <branch>'." >&2
+  # Only allow: git push origin feature/<name> (with optional -u flag)
+  if ! echo "$COMMAND" | grep -qE '^git push( -u)? origin feature/[^[:space:]:]+$'; then
+    echo "BLOCKED: only 'git push origin feature/<name>' is allowed." >&2
     exit 2
   fi
 

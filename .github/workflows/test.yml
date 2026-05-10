@@ -96,9 +96,15 @@ jobs:
           pip install -e . --no-deps
           # Extract runtime deps from pyproject.toml (skip tradingagents — numpy conflict)
           python3 -c "
-          import tomllib
-          with open('pyproject.toml','rb') as f:
-              deps = tomllib.load(f)['project']['dependencies']
+          import sys, tomllib
+          try:
+              with open('pyproject.toml','rb') as f:
+                  data = tomllib.load(f)
+              deps = data.get('project', {}).get('dependencies', [])
+              if not deps:
+                  sys.exit('ERROR: No dependencies found in pyproject.toml')
+          except (OSError, KeyError) as e:
+              sys.exit(f'ERROR: Failed to read pyproject.toml: {e}')
           for d in deps:
               if 'tradingagents' not in d:
                   print(d)
