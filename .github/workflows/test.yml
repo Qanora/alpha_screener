@@ -18,6 +18,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           config-path: .gitleaks.toml
 
@@ -30,7 +32,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install pre-commit
-        run: pip install pre-commit
+        run: pip install pre-commit mypy
       - name: Run all hooks
         run: pre-commit run --all-files --show-diff-on-failure
 
@@ -90,7 +92,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e . --no-deps
-          pip install pytest polars pydantic pydantic-settings click pyarrow
+          pip install pytest polars pydantic pydantic-settings click pyarrow pandas
 
       - name: Run tests
         run: python -m pytest tests/ -v
