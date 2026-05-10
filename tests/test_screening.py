@@ -343,9 +343,12 @@ class TestDedupBySectorIndustry:
         with pytest.raises(ValueError, match="top_n"):
             dedup_by_sector_industry(df, sector_cap=2, industry_cap=2, top_n=bad)
 
-    def test_missing_column_raises(self):
-        df = pl.DataFrame({"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"]})
-        with pytest.raises(KeyError, match="industry"):
+    @pytest.mark.parametrize("missing_col", ["sector", "industry", "coarse_score"])
+    def test_missing_column_raises(self, missing_col):
+        data = {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
+        data.pop(missing_col)
+        df = pl.DataFrame(data)
+        with pytest.raises(KeyError, match=missing_col):
             dedup_by_sector_industry(df, sector_cap=2, industry_cap=2)
 
 
