@@ -5,9 +5,9 @@
 #
 # Auto-approve rules:
 #   1. 0 actionable → approve
-#   2. major=0 AND critical=0 AND ≤ 2 trivial/minor AND new fix commit → approve
-#   3. major/critical > 0 OR > 2 trivial → reject
-#   4. ≤ 2 trivial but no fix commit yet → skip (waiting)
+#   2. major=0 AND critical=0 AND new fix commit → approve (any trivial count)
+#   3. major/critical > 0 → reject
+#   4. trivial only, no fix commit yet → wait (waiting)
 
 set -euo pipefail
 

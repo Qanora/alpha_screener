@@ -56,8 +56,8 @@ reviews:
 CodeRabbit 配置为 `auto_pause_after_reviewed_commits: 1`，每个 PR 只做首次提交的评审。
 
 CHANGES_REQUESTED 后分级处理（详见 SKILL.md）：
-- **≤ 2 trivial/minor** → 修 → commit → push 同分支 → auto-approve bot 自动 approve
-- **≥ 1 major/critical 或 > 2 trivial/minor** → 修 → `close-reopen.sh`
+- **trivial/minor（任意数量）** → 修 → commit → push 同分支 → auto-approve bot 自动 approve
+- **≥ 1 major/critical** → 修 → `close-reopen.sh`
 
 以下方式经实测不可靠（2026-05）：
 - `@coderabbitai full review` — 不会触发第二次评审

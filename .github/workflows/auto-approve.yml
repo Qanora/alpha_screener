@@ -65,7 +65,7 @@ jobs:
             exit 0
           fi
 
-          # major/critical or > 2 trivial → reject (block merge)
+          # major/critical → reject (block merge)
           if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ]; then
             echo "Has major/critical findings — requesting changes."
             gh pr review "$PR" --repo "$REPO" --request-changes \
