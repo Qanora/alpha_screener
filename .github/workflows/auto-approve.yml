@@ -1,0 +1,86 @@
+name: Auto-Approve Trivial Reviews
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  auto-approve:
+    if: |
+      github.event.review.user.login == 'coderabbitai[bot]' &&
+      github.event.review.state == 'changes_requested'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check and Auto-Approve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Get latest CodeRabbit review
+          REVIEW=$(gh pr view "$PR" --repo "$REPO" --json reviews --jq '
+            [.reviews[] | select(.author.login | test("coderabbit"))]
+            | last
+          ')
+
+          REVIEW_BODY=$(echo "$REVIEW" | jq -r '.body')
+          REVIEW_COMMIT=$(echo "$REVIEW" | jq -r '.commit_id // ""')
+
+          # Count actionable and severity
+          ACTIONABLE=$(echo "$REVIEW_BODY" | sed -n 's/.*\*\*Actionable comments posted: \([0-9]\{1,\}\).*/\1/p')
+          ACTIONABLE=${ACTIONABLE:-0}
+
+          MAJORS=$(echo "$REVIEW_BODY" | grep -c '"severity":"major"' || echo 0)
+          CRITICALS=$(echo "$REVIEW_BODY" | grep -c '"severity":"critical"' || echo 0)
+
+          # Check if a new commit was pushed after this review
+          PR_HEAD=$(gh pr view "$PR" --repo "$REPO" --json commits --jq '.commits[-1].oid // ""')
+
+          HAS_NEW_COMMIT="false"
+          if [ -n "$PR_HEAD" ] && [ -n "$REVIEW_COMMIT" ] && [ "$PR_HEAD" != "$REVIEW_COMMIT" ]; then
+            HAS_NEW_COMMIT="true"
+          fi
+
+          echo "PR #$PR: actionable=$ACTIONABLE majors=$MAJORS criticals=$CRITICALS new_commit=$HAS_NEW_COMMIT"
+
+          # --- Decision logic ---
+
+          # Case 1: 0 actionable → approve
+          if [ "$ACTIONABLE" -eq 0 ]; then
+            echo "No actionable comments — approving."
+            gh pr review "$PR" --repo "$REPO" --approve \
+              --body "Auto-approved: no actionable findings."
+            exit 0
+          fi
+
+          # Case 2: has major or critical → skip
+          if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ]; then
+            echo "Has major/critical findings — skipping auto-approve."
+            exit 0
+          fi
+
+          # Case 3: trivial/minor only, but too many → skip
+          if [ "$ACTIONABLE" -gt 2 ]; then
+            echo "$ACTIONABLE trivial/minor findings (> 2) — skipping auto-approve."
+            exit 0
+          fi
+
+          # Case 4: ≤ 2 trivial/minor, new fix commit pushed → approve
+          if [ "$HAS_NEW_COMMIT" = "true" ]; then
+            echo "≤ 2 trivial/minor + fix commit pushed — approving."
+            gh pr review "$PR" --repo "$REPO" --approve \
+              --body "Auto-approved: $ACTIONABLE trivial/minor finding(s), fix commit pushed."
+            exit 0
+          fi
+
+          # Case 5: ≤ 2 trivial/minor, no fix commit → skip
+          echo "≤ 2 trivial/minor but no fix commit — skipping auto-approve (waiting for fix)."

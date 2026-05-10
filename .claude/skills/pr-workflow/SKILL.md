@@ -54,9 +54,9 @@ bash scripts/watch-pr.sh <N>
 
 | 情况 | 处理 |
 |------|------|
-| 0 findings | 等 CI 通过 → auto-merge |
-| ≥ 1 major/critical | 修 → amend → `close-reopen.sh` |
-| 只有 trivial/minor (≤ 2, 0 major) | 修 → 新 commit → push 同分支 → merge |
+| 0 findings | 等 CI → auto-merge（bot 自动 approve） |
+| major=0 AND critical=0 AND ≤ 2 trivial/minor | 修 → commit → push 同分支 → bot 自动 approve → merge |
+| ≥ 1 major/critical 或 > 2 trivial | 修 → amend → `close-reopen.sh` |
 
 ```bash
 # 只有 trivial：正常 commit 推同分支，不用关旧开新
@@ -81,5 +81,6 @@ bash scripts/watch-pr.sh <new-N>
 | CI test ImportError | pyproject.toml 动态提取 deps |
 | 网络测试 CI 失败 | `@pytest.mark.network` |
 | Bot 不 approve | `.coderabbit.yaml`: `assertive` + `request_changes_workflow` |
+| Bot trivial review 阻塞 merge | Auto-Approve workflow 自动 approve（`.github/workflows/auto-approve.yml`） |
 
 见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
