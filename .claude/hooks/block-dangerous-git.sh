@@ -36,8 +36,8 @@ if echo "$COMMAND" | grep -qE '^git push'; then
     exit 2
   fi
 
-  # Block push to master or main
-  if echo "$COMMAND" | grep -qE 'git push origin (master|main)'; then
+  # Block push to master or main (including refspecs like HEAD:master)
+  if echo "$COMMAND" | grep -qE 'git push origin ([^ ]*:)?(master|main)'; then
     echo "BLOCKED: git push to master/main is forbidden. Use feature branches + PR." >&2
     exit 2
   fi

@@ -4,5 +4,5 @@ reviews:
     enabled: true
     auto_approve: true
     auto_pause_after_reviewed_commits: 10
-  summarization:
+  summarize:
     enabled: true
