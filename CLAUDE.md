@@ -15,16 +15,6 @@ Single-context layout: one `CONTEXT.md` + `docs/adr/` at the repo root. See `doc
 ## Workflow
 
 - 每个 commit 必须在 message 中关联 issue (e.g. `#3`, `closes #3`)
-- `git push` 允许推送到非 master 分支（master 被 guardrails 保护）
+- `git push` 只允许 `git push [-u] origin feature/<name>`（master/main/force push 被 guardrails 拦截）
 - 所有代码变更走 feature 分支 → PR → squash merge 流程
-
-### Feature branch workflow
-
-```bash
-git checkout -b feature/<name>         # 从 master 创建分支
-# ... 开发、commit（每个 commit 关联 issue）...
-git push -u origin <branch>            # 推送分支到 remote
-gh pr create --title "..." --body "..." --base master
-gh pr merge <N> --squash --delete-branch  # 合并后自动删除远程分支
-git checkout master && git pull origin master
-```
+- **提交 PR、查看 CI、修复 AI 评审意见 必须使用 `/pr-workflow` skill**

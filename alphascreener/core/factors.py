@@ -50,7 +50,7 @@ def _rolling_slope(returns: pl.Series, window: int) -> pl.Series:
             sum_y = y.sum()
             sum_xy = (x * y).sum()
             slope = (n * sum_xy - sum_x * sum_y) / denom
-            slopes.append(slope)
+            slopes.append(float(slope))
     return pl.Series(slopes)
 
 
@@ -172,9 +172,9 @@ def _atr_ratio(high: pl.Series, low: pl.Series, close: pl.Series) -> float:
     )["tr"]
     atr5 = tr.tail(ATR_SHORT).mean()
     atr20 = tr.tail(ATR_LONG).mean()
-    if atr20 is None or atr20 == 0:
+    if atr5 is None or atr20 is None or atr20 == 0:
         return 1.0
-    return atr5 / atr20
+    return float(atr5 / atr20)  # type: ignore[arg-type]
 
 
 def _mfi_14(typical_price: pl.Series, volume: pl.Series) -> float:
@@ -201,7 +201,7 @@ def _cmf_21(high: pl.Series, low: pl.Series, close: pl.Series, volume: pl.Series
     vol_sum = volume.tail(CMF_WINDOW).sum()
     if vol_sum is None or vol_sum == 0:
         return 0.0
-    return mf_sum / vol_sum
+    return float(mf_sum / vol_sum)
 
 
 def _vol_anomaly(volume: pl.Series, close: pl.Series) -> int:
@@ -225,10 +225,10 @@ def _rsi_oversold(close: pl.Series) -> int:
     loss = (-delta).clip(lower_bound=0)
     avg_gain = gain.tail(RSI_WINDOW).mean()
     avg_loss = loss.tail(RSI_WINDOW).mean()
-    if avg_loss is None or avg_loss == 0:
+    if avg_gain is None or avg_loss is None or avg_loss == 0:
         rsi = 100.0
     else:
-        rs = avg_gain / avg_loss
+        rs = float(avg_gain / avg_loss)  # type: ignore[arg-type]
         rsi = 100.0 - 100.0 / (1.0 + rs)
     sma20 = close.tail(20).mean()
     return 1 if rsi < 30 and close[-1] > sma20 else 0
