@@ -5,6 +5,7 @@
 - **gitleaks**: `env.GITHUB_TOKEN` 必须传入 action
 - **mypy INTERNAL ERROR**: mypy 2.x 引入了新的默认 flag 行为 (如 `--local-partial-types`, `--strict-bytes`)，代码可能需要适配，详见 [mypy changelog](https://mypy.readthedocs.io/en/stable/changelog.html) (2026-05)。如遇兼容问题可临时 pin `mypy<2`
 - **test ModuleNotFoundError**: 不要手写依赖列表——从 pyproject.toml 动态提取（需 Python 3.11+ 的 tomllib，在仓库根目录运行）：
+
   ```bash
   python3.11 -c "
 import tomllib
@@ -14,8 +15,14 @@ print('\n'.join(deps))
 " > deps.txt
   while read -r pkg; do pip install "$pkg"; done < deps.txt
   ```
+
   (旧版 Python 可用 `pip install tomli && python -c "import tomli; ..."`)
-  GNU 环境可选：`xargs -d '\n' -r pip install < deps.txt`
+
+  GNU 环境可选：
+
+  ```bash
+  xargs -d '\n' -r pip install < deps.txt
+  ```
 - **test 网络超时**: Stooq/yfinance API 不可达 → `@pytest.mark.network` + conftest CI skip
 
 ## Guardrails Hook

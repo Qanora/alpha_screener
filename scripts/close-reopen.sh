@@ -38,14 +38,17 @@ if [ -n "$DIRTY" ]; then
   exit 1
 fi
 
-# POSIX-safe version extraction: extract trailing v<N>, default to 0
-CURRENT_VERSION=$(echo "$OLD_BRANCH" | sed -n 's/.*v\([0-9]\{1,\}\)$/\1/p')
-CURRENT_VERSION=${CURRENT_VERSION:-0}
+# 版本号提取：从分支名末尾提取 v<N>，纯 bash 参数展开，不依赖 sed
+if [[ "$OLD_BRANCH" =~ v([0-9]+)$ ]]; then
+  CURRENT_VERSION=${BASH_REMATCH[1]}
+else
+  CURRENT_VERSION=0
+fi
 NEXT_VERSION=$((CURRENT_VERSION + 1))
 SUFFIX="${3:-$NEXT_VERSION}"
 
-if echo "$OLD_BRANCH" | grep -q 'v[0-9]\{1,\}$'; then
-  NEW_BRANCH=$(echo "$OLD_BRANCH" | sed "s/v[0-9]\{1,\}$/v$SUFFIX/")
+if [[ "$OLD_BRANCH" =~ v[0-9]+$ ]]; then
+  NEW_BRANCH="${OLD_BRANCH/%v*/v$SUFFIX}"
 else
   NEW_BRANCH="${OLD_BRANCH}-v${SUFFIX}"
 fi
