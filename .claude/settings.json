@@ -42,19 +42,25 @@
       "Bash(python3.11 -m vulture *)",
       "Bash(python3.11 -m bandit *)",
       "Bash(python3.11 -c *)",
-      "Bash(pip install *)",
+      "Bash(pip install -r *)",
+      "Bash(pip install -e *)",
+      "Bash(pip install --upgrade pip *)",
       "Bash(mkdir *)",
-      "Bash(rm *)",
+      "Bash(rm -rf dist/*)",
+      "Bash(rm -rf __pycache__/*)",
+      "Bash(rm -rf *.pyc)",
+      "Bash(rm -rf .pytest_cache/*)",
+      "Bash(rm -rf *.egg-info/*)",
       "Bash(cat *)",
       "Bash(grep *)",
       "Bash(find *)",
       "Bash(ls *)",
-      "Bash(chmod *)",
+      "Bash(chmod +x *)",
       "Bash(echo *)",
       "Bash(true)",
       "Bash(sleep *)",
       "Bash(which *)",
-      "Monitor*"
+      "Monitor(*)"
     ]
   }
 }
