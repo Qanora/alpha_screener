@@ -319,28 +319,29 @@ class TestDedupBySectorIndustry:
         result = dedup_by_sector_industry(df, sector_cap=3, industry_cap=2, top_n=5)
         assert len(result) == 5
 
-    def test_invalid_sector_cap_raises(self):
+    @pytest.mark.parametrize("bad", [0, -1, True, 1.5, "2"])
+    def test_invalid_sector_cap_raises(self, bad):
         df = pl.DataFrame(
             {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
         )
         with pytest.raises(ValueError, match="sector_cap"):
-            dedup_by_sector_industry(df, sector_cap=0, industry_cap=2)
-        with pytest.raises(ValueError, match="sector_cap"):
-            dedup_by_sector_industry(df, sector_cap=-1, industry_cap=2)
+            dedup_by_sector_industry(df, sector_cap=bad, industry_cap=2)
 
-    def test_invalid_industry_cap_raises(self):
+    @pytest.mark.parametrize("bad", [0, True, 1.0, "x"])
+    def test_invalid_industry_cap_raises(self, bad):
         df = pl.DataFrame(
             {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
         )
         with pytest.raises(ValueError, match="industry_cap"):
-            dedup_by_sector_industry(df, sector_cap=2, industry_cap=0)
+            dedup_by_sector_industry(df, sector_cap=2, industry_cap=bad)
 
-    def test_invalid_top_n_raises(self):
+    @pytest.mark.parametrize("bad", [0, False, 2.0, "top"])
+    def test_invalid_top_n_raises(self, bad):
         df = pl.DataFrame(
             {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
         )
         with pytest.raises(ValueError, match="top_n"):
-            dedup_by_sector_industry(df, sector_cap=2, industry_cap=2, top_n=0)
+            dedup_by_sector_industry(df, sector_cap=2, industry_cap=2, top_n=bad)
 
     def test_missing_column_raises(self):
         df = pl.DataFrame({"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"]})
