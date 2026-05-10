@@ -2,6 +2,7 @@
 
 from datetime import date, timedelta
 
+import pytest
 
 from alphascreener.adapters.yfinance_adapter import OHLCV_COL_MAP, YFinanceAdapter
 
@@ -27,6 +28,7 @@ class TestYFinanceAdapter:
         adapter = YFinanceAdapter(rps=3)
         assert adapter._semaphore is not None
 
+    @pytest.mark.network
     def test_fetch_ohlcv_batch_returns_correct_columns(self):
         adapter = YFinanceAdapter(rps=5)
         today = date.today()
@@ -34,6 +36,7 @@ class TestYFinanceAdapter:
         expected_cols = {"ticker", "date", "open", "high", "low", "close", "volume"}
         assert expected_cols.issubset(set(df.columns))
 
+    @pytest.mark.network
     def test_fetch_ohlcv_batch_returns_data(self):
         adapter = YFinanceAdapter(rps=5)
         today = date.today()
@@ -47,17 +50,20 @@ class TestYFinanceAdapter:
         df = adapter.fetch_ohlcv_batch([], today - timedelta(days=1), today)
         assert df.is_empty()
 
+    @pytest.mark.network
     def test_fetch_ticker_info_returns_dict(self):
         adapter = YFinanceAdapter()
         info = adapter.fetch_ticker_info("AAPL")
-        assert isinstance(info, dict)
-        assert "symbol" in info or "shortName" in info or len(info) >= 0
+        assert isinstance(info, dict) and len(info) > 0
+        assert "symbol" in info or "shortName" in info
 
+    @pytest.mark.network
     def test_fetch_ticker_info_invalid_ticker(self):
         adapter = YFinanceAdapter()
         info = adapter.fetch_ticker_info("ZZZZZZZZZZZ_INVALID")
         assert isinstance(info, dict)
 
+    @pytest.mark.network
     def test_fetch_earnings_dates(self):
         adapter = YFinanceAdapter()
         dates = adapter.fetch_earnings_dates("AAPL")

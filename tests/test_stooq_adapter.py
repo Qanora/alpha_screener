@@ -3,6 +3,7 @@
 from datetime import date, timedelta
 
 import polars as pl
+import pytest
 
 from alphascreener.adapters.stooq_adapter import STOOQ_BASE, CrossValidator, StooqAdapter
 
@@ -16,12 +17,14 @@ class TestStooqAdapter:
         adapter = StooqAdapter(base_url="https://example.com/data/")
         assert adapter.base_url == "https://example.com/data"
 
+    @pytest.mark.network
     def test_fetch_ohlcv_returns_none_or_dataframe(self):
         adapter = StooqAdapter()
         today = date.today()
         result = adapter.fetch_ohlcv("AAPL", today - timedelta(days=5), today)
         assert result is None or isinstance(result, pl.DataFrame)
 
+    @pytest.mark.network
     def test_fetch_batch_returns_dict(self):
         adapter = StooqAdapter()
         today = date.today()
@@ -56,6 +59,7 @@ class TestCrossValidator:
         result = validator.validate(empty_df, ["AAPL"], today)
         assert result.is_empty()
 
+    @pytest.mark.network
     def test_validate_no_stooq_data(self):
         stooq = StooqAdapter()
         validator = CrossValidator(stooq)
