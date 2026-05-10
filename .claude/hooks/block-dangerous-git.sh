@@ -25,21 +25,18 @@ done
 # git push: allow feature branches, block master/main and bare push
 # Strip trailing redirects before checking
 PUSH_CMD=$(echo "$COMMAND" | sed 's/ *2>&1 *$//; s/ *>[^ ]* *$//')
-if echo "$PUSH_CMD" | grep -qE '^git push'; then
-  # Block push --force to any branch
-  if echo "$PUSH_CMD" | grep -qE 'push.*--force'; then
+if echo "$PUSH_CMD" | grep -qE '(^|[[:space:]])git push'; then
+  if echo "$PUSH_CMD" | grep -qE 'git push.*(--force|-f)'; then
     echo "BLOCKED: git push --force is forbidden." >&2
     exit 2
   fi
 
-  # Only allow: git push origin feature/<name> (with optional -u flag)
-  if ! echo "$PUSH_CMD" | grep -qE '^git push( -u)? origin feature/[^[:space:]:]+$'; then
+  if ! echo "$PUSH_CMD" | grep -qE '(^|[[:space:]])git push( -u)? origin feature/[^[:space:]:]+$'; then
     echo "BLOCKED: only 'git push origin feature/<name>' is allowed." >&2
     exit 2
   fi
 
-  # Block push to master or main (including refs/heads/* and HEAD:* refspecs)
-  if echo "$PUSH_CMD" | grep -qE '^git push( -u)? origin (master|main|refs/heads/master|refs/heads/main|([^[:space:]:]+:)?(master|main))$'; then
+  if echo "$PUSH_CMD" | grep -qE '(^|[[:space:]])git push( -u)? origin (master|main|refs/heads/master|refs/heads/main|([^[:space:]:]+:)?(master|main))$'; then
     echo "BLOCKED: git push to master/main is forbidden. Use feature branches + PR." >&2
     exit 2
   fi

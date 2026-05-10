@@ -2,6 +2,7 @@
 
 from datetime import date, timedelta
 
+import pytest
 import polars as pl
 
 from alphascreener.core.screening import (
@@ -317,6 +318,34 @@ class TestDedupBySectorIndustry:
         )
         result = dedup_by_sector_industry(df, sector_cap=3, industry_cap=2, top_n=5)
         assert len(result) == 5
+
+    def test_invalid_sector_cap_raises(self):
+        df = pl.DataFrame(
+            {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
+        )
+        with pytest.raises(ValueError, match="sector_cap"):
+            dedup_by_sector_industry(df, sector_cap=0, industry_cap=2)
+        with pytest.raises(ValueError, match="sector_cap"):
+            dedup_by_sector_industry(df, sector_cap=-1, industry_cap=2)
+
+    def test_invalid_industry_cap_raises(self):
+        df = pl.DataFrame(
+            {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
+        )
+        with pytest.raises(ValueError, match="industry_cap"):
+            dedup_by_sector_industry(df, sector_cap=2, industry_cap=0)
+
+    def test_invalid_top_n_raises(self):
+        df = pl.DataFrame(
+            {"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"], "industry": ["Y"]}
+        )
+        with pytest.raises(ValueError, match="top_n"):
+            dedup_by_sector_industry(df, sector_cap=2, industry_cap=2, top_n=0)
+
+    def test_missing_column_raises(self):
+        df = pl.DataFrame({"ticker": ["A"], "coarse_score": [0.5], "sector": ["X"]})
+        with pytest.raises(KeyError, match="industry"):
+            dedup_by_sector_industry(df, sector_cap=2, industry_cap=2)
 
 
 class TestFactorWeights:

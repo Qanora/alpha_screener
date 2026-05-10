@@ -135,6 +135,16 @@ def dedup_by_sector_industry(
     top_n: int = 20,
 ) -> pl.DataFrame:
     """Greedy dedup by sector/industry caps, sorted by coarse_score descending."""
+    if not isinstance(sector_cap, int) or sector_cap < 1:
+        raise ValueError(f"sector_cap must be a positive integer, got {sector_cap!r}")
+    if not isinstance(industry_cap, int) or industry_cap < 1:
+        raise ValueError(f"industry_cap must be a positive integer, got {industry_cap!r}")
+    if not isinstance(top_n, int) or top_n < 1:
+        raise ValueError(f"top_n must be a positive integer, got {top_n!r}")
+    for col in ("sector", "industry", "coarse_score"):
+        if col not in df.columns:
+            raise KeyError(f"DataFrame missing required column: {col!r}")
+
     work = df.sort("coarse_score", descending=True).with_columns(
         pl.col("sector").fill_null(MISSING_SECTOR_INDUSTRY),
         pl.col("industry").fill_null(MISSING_SECTOR_INDUSTRY),

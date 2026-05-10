@@ -108,7 +108,7 @@ jobs:
           for d in deps:
               if 'tradingagents' not in d:
                   print(d)
-          " | xargs -d '\n' pip install
+          " | xargs -d '\n' -r pip install
           # Dev deps for testing
           pip install pytest
 
