@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install pre-commit
-        run: pip install pre-commit "mypy<2"
+        run: pip install pre-commit "mypy>=1.15,<2" types-requests
       - name: Run all hooks
         run: pre-commit run --all-files --show-diff-on-failure
 
