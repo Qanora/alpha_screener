@@ -55,7 +55,8 @@ class TestYFinanceAdapter:
         adapter = YFinanceAdapter()
         info = adapter.fetch_ticker_info("AAPL")
         assert isinstance(info, dict)
-        assert "symbol" in info or "shortName" in info or len(info) >= 0
+        assert isinstance(info, dict) and len(info) > 0
+        assert "symbol" in info or "shortName" in info
 
     @pytest.mark.network
     def test_fetch_ticker_info_invalid_ticker(self):

@@ -21,7 +21,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
         run: |
           # Check all required CI checks are passing
           STATUS=$(gh pr view "$PR_NUMBER" --json stateCheckRollup -q '.stateCheckRollup[] | select(.status == "COMPLETED" and .conclusion != "SUCCESS" and .conclusion != "SKIPPED") | .name')
