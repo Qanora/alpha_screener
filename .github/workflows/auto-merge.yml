@@ -28,7 +28,7 @@ jobs:
             exit 0
           fi
 
-          STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup -q '.statusCheckRollup[] | select(.status != "COMPLETED" or (.status == "COMPLETED" and .conclusion != "SUCCESS" and .conclusion != "SKIPPED")) | .name')
+          STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup -q '.statusCheckRollup[] | select(.name != "auto-merge" and (.status != "COMPLETED" or (.conclusion != "SUCCESS" and .conclusion != "SKIPPED"))) | .name')
 
           if [ -n "$STATUS" ]; then
             echo "Some checks still failing or pending:"
