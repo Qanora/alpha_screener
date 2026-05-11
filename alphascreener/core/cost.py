@@ -40,14 +40,16 @@ class CostCircuitBreaker:
         Levels are checked from highest to lowest so more severe
         conditions always take precedence.
         """
+        today_str = date.today().isoformat()
         with get_db(self._settings.db_path) as conn:
             row = conn.execute(
                 "SELECT "
-                "COALESCE(SUM(CASE WHEN cost_date = date('now') "
+                "COALESCE(SUM(CASE WHEN cost_date = ? "
                 "THEN total_usd ELSE 0 END), 0), "
                 "AVG(total_usd) "
                 "FROM llm_cost_daily "
-                "WHERE cost_date >= date('now', '-29 days')"
+                "WHERE cost_date >= date(?, '-29 days')",
+                (today_str, today_str),
             ).fetchone()
             today_cost: float = row[0]
             rolling_mean: float = row[1] or 0.0

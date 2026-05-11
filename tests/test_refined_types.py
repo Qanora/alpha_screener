@@ -378,3 +378,35 @@ class TestValidateBreakoutAssessment:
         )
         result = validate_breakout_assessment(raw)
         assert result.breakout_probability == 0.0
+
+    def test_json_array_returns_defaults(self):
+        result = validate_breakout_assessment("[]")
+        assert isinstance(result, BreakoutAssessment)
+        assert result.score_correction == 1.0
+        assert result.risk_tags == []
+        assert result.final_rating == FinalRating.hold
+
+    def test_risk_tags_null_treated_as_empty(self):
+        raw = json.dumps({"ticker": "X", "risk_tags": None, "final_rating": "Hold"})
+        result = validate_breakout_assessment(raw)
+        assert result.risk_tags == []
+
+    def test_risk_tags_number_treated_as_empty(self):
+        raw = json.dumps({"ticker": "X", "risk_tags": 123, "final_rating": "Hold"})
+        result = validate_breakout_assessment(raw)
+        assert result.risk_tags == []
+
+    def test_risk_tags_object_treated_as_empty(self):
+        raw = json.dumps({"ticker": "X", "risk_tags": {"a": 1}, "final_rating": "Hold"})
+        result = validate_breakout_assessment(raw)
+        assert result.risk_tags == []
+
+    def test_final_rating_null_defaults_to_hold(self):
+        raw = json.dumps({"ticker": "X", "risk_tags": [], "final_rating": None})
+        result = validate_breakout_assessment(raw)
+        assert result.final_rating == FinalRating.hold
+
+    def test_final_rating_number_defaults_to_hold(self):
+        raw = json.dumps({"ticker": "X", "risk_tags": [], "final_rating": 123})
+        result = validate_breakout_assessment(raw)
+        assert result.final_rating == FinalRating.hold
