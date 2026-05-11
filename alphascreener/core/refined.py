@@ -1,6 +1,7 @@
 """Refined type models for analyst reports, bull/bear output, and breakout assessments."""
 
 import json
+import math
 from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
@@ -41,7 +42,9 @@ class BreakoutAssessment(BaseModel):
 def _coerce_float(value, lo: float, hi: float) -> float | None:
     """Clamp a numeric value into [lo, hi]; return None if not numeric."""
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return max(lo, min(hi, float(value)))
+        f = float(value)
+        if math.isfinite(f):
+            return max(lo, min(hi, f))
     return None
 
 
