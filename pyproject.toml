@@ -18,7 +18,7 @@ dependencies = [
     "faiss-cpu>=1.7",
 
     # 回测
-    "backtrader>=1.9.78",
+    "backtrader>=1.9.78.123",
 
     # 数据源
     "yfinance>=0.2.40",
