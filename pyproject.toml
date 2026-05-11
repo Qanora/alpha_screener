@@ -23,7 +23,7 @@ dependencies = [
     # 数据源
     "yfinance>=0.2.40",
     "requests>=2.31",
-    "httpx>=0.26",
+    "httpx>=0.28.1",
 
     # 调度与存储
     "apscheduler>=3.10",
