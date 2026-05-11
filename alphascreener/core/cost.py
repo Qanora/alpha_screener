@@ -1,6 +1,7 @@
 """Cost circuit breaker for LLM API call budgeting (issue #14)."""
 
 import json
+import math
 from datetime import date
 from enum import Enum
 
@@ -73,8 +74,8 @@ class CostCircuitBreaker:
         and call_count for an existing date, and replace by_module_json
         with the latest value.
         """
-        if total_usd < 0:
-            raise ValueError(f"total_usd must be >= 0, got {total_usd}")
+        if total_usd < 0 or not math.isfinite(total_usd):
+            raise ValueError(f"total_usd must be a finite number >= 0, got {total_usd}")
         if call_count < 0:
             raise ValueError(f"call_count must be >= 0, got {call_count}")
         parsed = json.loads(by_module_json)

@@ -431,3 +431,19 @@ class TestValidateBreakoutAssessment:
         result = validate_breakout_assessment(raw)
         assert result.score_correction == 1.0
         assert result.breakout_probability == 0.0
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+    def test_non_finite_score_correction_falls_back_to_default(self, bad_value):
+        raw = json.dumps(
+            {"ticker": "X", "score_correction": bad_value, "breakout_probability": 0.5}
+        )
+        result = validate_breakout_assessment(raw)
+        assert result.score_correction == 1.0
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+    def test_non_finite_breakout_probability_falls_back_to_default(self, bad_value):
+        raw = json.dumps(
+            {"ticker": "X", "score_correction": 1.0, "breakout_probability": bad_value}
+        )
+        result = validate_breakout_assessment(raw)
+        assert result.breakout_probability == 0.0

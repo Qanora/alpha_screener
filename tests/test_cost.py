@@ -282,3 +282,11 @@ class TestCostCircuitBreakerValidation:
         cb = CostCircuitBreaker(settings)
         with pytest.raises(ValueError, match="JSON object"):
             cb.record(date.today(), 0.50, 1, "[1, 2, 3]")
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+    def test_record_raises_on_non_finite_cost(self, temp_db_path, settings, bad_value):
+        from alphascreener.core.cost import CostCircuitBreaker
+
+        cb = CostCircuitBreaker(settings)
+        with pytest.raises(ValueError, match="finite"):
+            cb.record(date.today(), bad_value, 1, "{}")
