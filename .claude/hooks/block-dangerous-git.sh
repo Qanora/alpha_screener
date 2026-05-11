@@ -8,7 +8,6 @@ DANGEROUS_PATTERNS=(
   "git reset --hard"
   "git clean -fd"
   "git clean -f"
-  "git branch -D"
   "git checkout \."
   "git restore \."
   "push --force"
@@ -21,6 +20,31 @@ for pattern in "${DANGEROUS_PATTERNS[@]}"; do
     exit 2
   fi
 done
+
+# git branch -D: only allow feature/ branches (not master/main)
+# Normalize command first (strip path, git -c/-C flags) like push check
+BRANCH_DEL_CMD=$(echo "$COMMAND" | sed 's/ *2>&1 *$//; s/ *>[^ ]* *$//; s|^.*/git |git |; s/^git\( -[cC] [^ ]*\)\+/git /')
+if echo "$BRANCH_DEL_CMD" | grep -qE 'git[[:space:]]+branch[[:space:]]+-D([[:space:]]|$)'; then
+  if echo "$BRANCH_DEL_CMD" | grep -qE '(&&|;|\|\||\|)'; then
+    echo "BLOCKED: command chaining with git branch -D is not allowed." >&2
+    exit 2
+  fi
+  # Extract branch names after -D flag
+  BRANCHES=$(echo "$BRANCH_DEL_CMD" | sed -n 's/.*git[[:space:]]\+branch[[:space:]]\+-D[[:space:]]\+//p')
+  for branch in $BRANCHES; do
+    case "$branch" in
+      master|main)
+        echo "BLOCKED: cannot delete master/main branch." >&2
+        exit 2
+        ;;
+      feature/*) ;;
+      *)
+        echo "BLOCKED: 'git branch -D' only allowed for feature/<name> branches, got '$branch'." >&2
+        exit 2
+        ;;
+    esac
+  done
+fi
 
 # Only check git push commands (strip leading path and git config flags)
 PUSH_CMD=$(echo "$COMMAND" | sed 's/ *2>&1 *$//; s/ *>[^ ]* *$//; s|^.*/git |git |; s/^git\( -[cC] [^ ]*\)\+/git /')
