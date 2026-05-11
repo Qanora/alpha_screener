@@ -350,3 +350,31 @@ class TestValidateBreakoutAssessment:
         )
         result = validate_breakout_assessment(raw, default_ticker="UNKNOWN")
         assert result.ticker == "UNKNOWN"
+
+    def test_breakout_probability_above_1_clamped(self):
+        raw = json.dumps(
+            {
+                "ticker": "X",
+                "score_correction": 1.0,
+                "risk_tags": [],
+                "final_rating": "Hold",
+                "breakout_probability": 1.5,
+                "rationale": "Too high probability.",
+            }
+        )
+        result = validate_breakout_assessment(raw)
+        assert result.breakout_probability == 1.0
+
+    def test_breakout_probability_below_0_clamped(self):
+        raw = json.dumps(
+            {
+                "ticker": "X",
+                "score_correction": 1.0,
+                "risk_tags": [],
+                "final_rating": "Hold",
+                "breakout_probability": -0.5,
+                "rationale": "Negative probability.",
+            }
+        )
+        result = validate_breakout_assessment(raw)
+        assert result.breakout_probability == 0.0

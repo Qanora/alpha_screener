@@ -85,4 +85,9 @@ def validate_breakout_assessment(
     if "ticker" not in parsed:
         parsed["ticker"] = default_ticker
 
+    if "breakout_probability" in parsed:
+        bp = parsed["breakout_probability"]
+        if isinstance(bp, (int, float)):
+            parsed["breakout_probability"] = max(0.0, min(1.0, bp))
+
     return BreakoutAssessment(**parsed)

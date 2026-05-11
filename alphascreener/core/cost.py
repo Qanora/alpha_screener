@@ -1,5 +1,6 @@
 """Cost circuit breaker for LLM API call budgeting (issue #14)."""
 
+import json
 from datetime import date
 from enum import Enum
 
@@ -20,7 +21,18 @@ class CostCircuitBreaker:
     """Monitors daily and rolling-30-day LLM costs and trips breaker levels."""
 
     def __init__(self, settings) -> None:
-        self._settings = settings
+        s = settings
+        if s.cost_l1_warning_daily_usd > s.cost_l2_degrade_daily_usd:
+            raise ValueError(
+                f"L1 warning ({s.cost_l1_warning_daily_usd}) must be <= "
+                f"L2 degrade ({s.cost_l2_degrade_daily_usd})"
+            )
+        if s.cost_l3_savings_monthly_avg_usd > s.cost_l4_circuit_monthly_avg_usd:
+            raise ValueError(
+                f"L3 savings ({s.cost_l3_savings_monthly_avg_usd}) must be <= "
+                f"L4 circuit ({s.cost_l4_circuit_monthly_avg_usd})"
+            )
+        self._settings = s
 
     def check(self) -> BreakerLevel:
         """Evaluate cost against thresholds and return the active breaker level.
@@ -59,6 +71,12 @@ class CostCircuitBreaker:
         and call_count for an existing date, and replace by_module_json
         with the latest value.
         """
+        if total_usd < 0:
+            raise ValueError(f"total_usd must be >= 0, got {total_usd}")
+        if call_count < 0:
+            raise ValueError(f"call_count must be >= 0, got {call_count}")
+        json.loads(by_module_json)  # validate JSON parseable
+
         with get_db(self._settings.db_path) as conn:
             conn.execute(
                 "INSERT INTO llm_cost_daily "

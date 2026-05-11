@@ -211,3 +211,44 @@ class TestCostCircuitBreakerRecord:
             ).fetchone()
 
         assert row[0] == module_json
+
+
+class TestCostCircuitBreakerValidation:
+    """Test input validation in __init__ and record()."""
+
+    def test_init_raises_when_l1_gt_l2(self, temp_db_path, settings):
+        from alphascreener.core.cost import CostCircuitBreaker
+
+        settings.cost_l1_warning_daily_usd = 1.50
+        settings.cost_l2_degrade_daily_usd = 1.00
+        with pytest.raises(ValueError, match="L1 warning"):
+            CostCircuitBreaker(settings)
+
+    def test_init_raises_when_l3_gt_l4(self, temp_db_path, settings):
+        from alphascreener.core.cost import CostCircuitBreaker
+
+        settings.cost_l3_savings_monthly_avg_usd = 4.00
+        settings.cost_l4_circuit_monthly_avg_usd = 3.00
+        with pytest.raises(ValueError, match="L3 savings"):
+            CostCircuitBreaker(settings)
+
+    def test_record_raises_on_negative_cost(self, temp_db_path, settings):
+        from alphascreener.core.cost import CostCircuitBreaker
+
+        cb = CostCircuitBreaker(settings)
+        with pytest.raises(ValueError, match="total_usd"):
+            cb.record(date.today(), -0.10, 1, "{}")
+
+    def test_record_raises_on_negative_call_count(self, temp_db_path, settings):
+        from alphascreener.core.cost import CostCircuitBreaker
+
+        cb = CostCircuitBreaker(settings)
+        with pytest.raises(ValueError, match="call_count"):
+            cb.record(date.today(), 0.50, -1, "{}")
+
+    def test_record_raises_on_invalid_json(self, temp_db_path, settings):
+        from alphascreener.core.cost import CostCircuitBreaker
+
+        cb = CostCircuitBreaker(settings)
+        with pytest.raises(json.JSONDecodeError):
+            cb.record(date.today(), 0.50, 1, "not json")
