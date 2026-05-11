@@ -410,3 +410,24 @@ class TestValidateBreakoutAssessment:
         raw = json.dumps({"ticker": "X", "risk_tags": [], "final_rating": 123})
         result = validate_breakout_assessment(raw)
         assert result.final_rating == FinalRating.hold
+
+    def test_raw_json_none_returns_defaults(self):
+        result = validate_breakout_assessment(None)  # type: ignore[arg-type]
+        assert isinstance(result, BreakoutAssessment)
+        assert result.ticker == "UNKNOWN"
+        assert result.score_correction == 1.0
+        assert result.risk_tags == []
+        assert result.final_rating == FinalRating.hold
+        assert result.breakout_probability == 0.0
+
+    def test_non_numeric_score_fields_fall_back_to_defaults(self):
+        raw = json.dumps(
+            {
+                "ticker": "X",
+                "score_correction": "abc",
+                "breakout_probability": None,
+            }
+        )
+        result = validate_breakout_assessment(raw)
+        assert result.score_correction == 1.0
+        assert result.breakout_probability == 0.0

@@ -3,7 +3,7 @@
 import json
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from alphascreener.types import FinalRating, HARD_KILL_TAGS, RiskTag
 
@@ -60,7 +60,7 @@ def validate_breakout_assessment(
     """
     try:
         parsed = json.loads(raw_json)
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError, TypeError):
         return BreakoutAssessment(ticker=default_ticker)
 
     if not isinstance(parsed, dict):
@@ -70,6 +70,8 @@ def validate_breakout_assessment(
         clamped = _coerce_float(parsed["score_correction"], 0.90, 1.05)
         if clamped is not None:
             parsed["score_correction"] = clamped
+        else:
+            del parsed["score_correction"]
 
     if "risk_tags" in parsed:
         raw_tags = parsed["risk_tags"]
@@ -108,5 +110,10 @@ def validate_breakout_assessment(
         clamped = _coerce_float(parsed["breakout_probability"], 0.0, 1.0)
         if clamped is not None:
             parsed["breakout_probability"] = clamped
+        else:
+            del parsed["breakout_probability"]
 
-    return BreakoutAssessment(**parsed)
+    try:
+        return BreakoutAssessment(**parsed)
+    except ValidationError:
+        return BreakoutAssessment(ticker=default_ticker)

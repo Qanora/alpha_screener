@@ -44,11 +44,11 @@ class CostCircuitBreaker:
         with get_db(self._settings.db_path) as conn:
             row = conn.execute(
                 "SELECT "
-                "COALESCE(SUM(CASE WHEN cost_date = ? "
+                "COALESCE(SUM(CASE WHEN cost_date = ?1 "
                 "THEN total_usd ELSE 0 END), 0), "
                 "AVG(total_usd) "
                 "FROM llm_cost_daily "
-                "WHERE cost_date >= date(?, '-29 days')",
+                "WHERE cost_date BETWEEN date(?2, '-29 days') AND ?2",
                 (today_str, today_str),
             ).fetchone()
             today_cost: float = row[0]
@@ -77,7 +77,9 @@ class CostCircuitBreaker:
             raise ValueError(f"total_usd must be >= 0, got {total_usd}")
         if call_count < 0:
             raise ValueError(f"call_count must be >= 0, got {call_count}")
-        json.loads(by_module_json)  # validate JSON parseable
+        parsed = json.loads(by_module_json)
+        if not isinstance(parsed, dict):
+            raise ValueError(f"by_module_json must be a JSON object, got {type(parsed).__name__}")
 
         with get_db(self._settings.db_path) as conn:
             conn.execute(
