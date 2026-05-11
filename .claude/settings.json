@@ -11,5 +11,51 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git merge *)",
+      "Bash(git rebase *)",
+      "Bash(git cherry-pick *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr close *)",
+      "Bash(gh pr comment *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh run *)",
+      "Bash(cr review *)",
+      "Bash(python3.11 -m pytest *)",
+      "Bash(python3.11 -m mypy *)",
+      "Bash(python3.11 -m ruff *)",
+      "Bash(python3.11 -m vulture *)",
+      "Bash(python3.11 -m bandit *)",
+      "Bash(pip install -r *)",
+      "Bash(pip install -e *)",
+      "Bash(mkdir *)",
+      "Bash(rm -rf dist/*)",
+      "Bash(rm -rf __pycache__/*)",
+      "Bash(rm -rf *.pyc)",
+      "Bash(rm -rf .pytest_cache/*)",
+      "Bash(rm -rf *.egg-info/*)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(ls *)",
+      "Bash(chmod +x scripts/*)",
+      "Bash(echo *)",
+      "Bash(true)",
+      "Bash(sleep *)",
+      "Bash(which *)",
+      "Monitor(*)"
+    ]
   }
 }
