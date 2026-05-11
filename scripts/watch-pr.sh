@@ -1,7 +1,7 @@
 #!/bin/bash
 # PR Monitor — fixed, no more ad-hoc jq tweaks.
 # Usage: ./watch-pr.sh <pr_number> [timeout_rounds]
-# Exit: 0=merged/approved, 1=CI failure, 2=stuck/timeout, 3=gh command failed, 4=changes requested, 5=missing tools, 6=invalid timeout
+# Exit: 0=merged, 1=CI failure, 2=stuck/timeout, 3=gh command failed, 4=changes requested, 5=missing tools, 6=invalid timeout
 
 set -euo pipefail
 
@@ -64,8 +64,7 @@ while true; do
   fi
 
   if [ "$REVIEW" = "APPROVED" ] && [ -z "$PENDING" ] && [ -z "$FAILING" ]; then
-    echo "=== APPROVED with all CI passed — auto-merge should follow ==="
-    exit 0
+    echo "=== APPROVED with all CI passed — waiting for merge ==="
   fi
 
   if [ -n "$FAILING" ]; then

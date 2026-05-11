@@ -58,18 +58,18 @@ jobs:
             fi
           }
 
-          # 0 actionable → approve now
-          if [ "$ACTIONABLE" -eq 0 ]; then
-            echo "No actionable comments — approving."
-            do_approve "Auto-approved: no actionable findings."
-            exit 0
-          fi
-
-          # major/critical → reject (block merge)
+          # major/critical → reject (block merge) — check BEFORE approve
           if [ "$MAJORS" -gt 0 ] || [ "$CRITICALS" -gt 0 ]; then
             echo "Has major/critical findings — requesting changes."
             gh pr review "$PR" --repo "$REPO" --request-changes \
               --body "Auto-rejected: major/critical=$((MAJORS + CRITICALS)). Fix and close-reopen."
+            exit 0
+          fi
+
+          # 0 actionable + no major/critical → approve now
+          if [ "$ACTIONABLE" -eq 0 ]; then
+            echo "No actionable comments — approving."
+            do_approve "Auto-approved: no actionable findings."
             exit 0
           fi
 
