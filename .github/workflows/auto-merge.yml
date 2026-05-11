@@ -22,13 +22,28 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          CHECK_COUNT=$(gh pr view "$PR_NUMBER" --json statusCheckRollup -q '.statusCheckRollup | length')
+          # Use same filtered set (excl. auto-merge) for both count and status checks
+          FILTERED=$(gh pr view "$PR_NUMBER" --json statusCheckRollup -q '
+            [.statusCheckRollup[] | select(.name != "auto-merge")]
+          ')
+          CHECK_COUNT=$(echo "$FILTERED" | jq '. | length')
           if [ "$CHECK_COUNT" -eq 0 ]; then
             echo "No CI checks found yet. Aborting auto-merge."
             exit 0
           fi
 
-          STATUS=$(gh pr view "$PR_NUMBER" --json statusCheckRollup -q '.statusCheckRollup[] | select(.status != "COMPLETED" or (.status == "COMPLETED" and .conclusion != "SUCCESS" and .conclusion != "SKIPPED")) | .name')
+          STATUS=$(echo "$FILTERED" | jq -r '
+            .[]
+            | . as $c
+            | select(
+                if $c.status != null then
+                  ($c.status != "COMPLETED" or ($c.conclusion != "SUCCESS" and $c.conclusion != "SKIPPED" and $c.conclusion != "NEUTRAL"))
+                else
+                  ($c.state != "SUCCESS" and $c.state != "NEUTRAL")
+                end
+              )
+            | .name
+          ')
 
           if [ -n "$STATUS" ]; then
             echo "Some checks still failing or pending:"
