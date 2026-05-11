@@ -46,7 +46,7 @@ class TestCostCircuitBreakerCheck:
     def test_returns_normal_when_table_empty(self, temp_db_path, settings):
         from alphascreener.core.cost import BreakerLevel, CostCircuitBreaker
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         assert cb.check() == BreakerLevel.NORMAL
 
     def test_returns_normal_below_all_thresholds(self, temp_db_path, settings):
@@ -59,7 +59,7 @@ class TestCostCircuitBreakerCheck:
             )
             conn.commit()
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         assert cb.check() == BreakerLevel.NORMAL
 
     def test_returns_l1_warning_when_daily_ge_80_cents(self, temp_db_path, settings):
@@ -72,7 +72,7 @@ class TestCostCircuitBreakerCheck:
             )
             conn.commit()
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         assert cb.check() == BreakerLevel.L1_WARNING
 
     def test_returns_l2_degrade_when_daily_ge_1_dollar(self, temp_db_path, settings):
@@ -85,7 +85,7 @@ class TestCostCircuitBreakerCheck:
             )
             conn.commit()
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         assert cb.check() == BreakerLevel.L2_DEGRADE
 
     def test_returns_l3_savings_when_rolling_mean_ge_2_67(self, temp_db_path, settings):
@@ -101,7 +101,7 @@ class TestCostCircuitBreakerCheck:
                 )
             conn.commit()
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         assert cb.check() == BreakerLevel.L3_SAVINGS
 
     def test_returns_l4_circuit_when_rolling_mean_ge_3_17(self, temp_db_path, settings):
@@ -117,7 +117,7 @@ class TestCostCircuitBreakerCheck:
                 )
             conn.commit()
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         assert cb.check() == BreakerLevel.L4_CIRCUIT
 
     def test_l3_over_l2_when_both_triggered(self, temp_db_path, settings):
@@ -140,7 +140,7 @@ class TestCostCircuitBreakerCheck:
                 )
             conn.commit()
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         assert cb.check() == BreakerLevel.L3_SAVINGS
 
     def test_l4_over_all_lower_levels(self, temp_db_path, settings):
@@ -157,7 +157,7 @@ class TestCostCircuitBreakerCheck:
                 )
             conn.commit()
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         assert cb.check() == BreakerLevel.L4_CIRCUIT
 
 
@@ -167,7 +167,7 @@ class TestCostCircuitBreakerRecord:
     def test_inserts_new_row_when_date_not_exists(self, temp_db_path, settings):
         from alphascreener.core.cost import CostCircuitBreaker
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         cb.record(date.today(), 0.50, 5, '{"screening": 0.50}')
 
         with get_db(temp_db_path) as conn:
@@ -183,7 +183,7 @@ class TestCostCircuitBreakerRecord:
     def test_updates_existing_row_accumulates_amounts(self, temp_db_path, settings):
         from alphascreener.core.cost import CostCircuitBreaker
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         cb.record(date.today(), 0.50, 5, '{"screening": 0.50}')
         cb.record(date.today(), 0.30, 3, '{"eval": 0.30}')
 
@@ -202,7 +202,7 @@ class TestCostCircuitBreakerRecord:
 
         module_json = json.dumps({"screening": 0.25, "eval": 0.15})
 
-        cb = CostCircuitBreaker(temp_db_path, settings)
+        cb = CostCircuitBreaker(settings)
         cb.record(date.today(), 0.40, 8, module_json)
 
         with get_db(temp_db_path) as conn:

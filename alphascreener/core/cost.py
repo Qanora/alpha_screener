@@ -2,7 +2,6 @@
 
 from datetime import date
 from enum import Enum
-from pathlib import Path
 
 from alphascreener.db import get_db
 
@@ -20,8 +19,7 @@ class BreakerLevel(str, Enum):
 class CostCircuitBreaker:
     """Monitors daily and rolling-30-day LLM costs and trips breaker levels."""
 
-    def __init__(self, db_path: Path, settings) -> None:
-        self._db_path = db_path
+    def __init__(self, settings) -> None:
         self._settings = settings
 
     def check(self) -> BreakerLevel:
@@ -30,20 +28,18 @@ class CostCircuitBreaker:
         Levels are checked from highest to lowest so more severe
         conditions always take precedence.
         """
-        with get_db(self._db_path) as conn:
+        with get_db(self._settings.db_path) as conn:
             row = conn.execute(
-                "SELECT COALESCE(SUM(total_usd), 0) FROM llm_cost_daily "
-                "WHERE cost_date = date('now')"
-            ).fetchone()
-            today_cost: float = row[0]
-
-            row = conn.execute(
-                "SELECT AVG(total_usd) FROM llm_cost_daily "
+                "SELECT "
+                "COALESCE(SUM(CASE WHEN cost_date = date('now') "
+                "THEN total_usd ELSE 0 END), 0), "
+                "AVG(total_usd) "
+                "FROM llm_cost_daily "
                 "WHERE cost_date >= date('now', '-29 days')"
             ).fetchone()
-            rolling_mean: float = row[0] or 0.0
+            today_cost: float = row[0]
+            rolling_mean: float = row[1] or 0.0
 
-        # Check highest severity first
         if rolling_mean >= self._settings.cost_l4_circuit_monthly_avg_usd:
             return BreakerLevel.L4_CIRCUIT
         if rolling_mean >= self._settings.cost_l3_savings_monthly_avg_usd:
@@ -63,7 +59,7 @@ class CostCircuitBreaker:
         and call_count for an existing date, and replace by_module_json
         with the latest value.
         """
-        with get_db(self._db_path) as conn:
+        with get_db(self._settings.db_path) as conn:
             conn.execute(
                 "INSERT INTO llm_cost_daily "
                 "(cost_date, total_usd, call_count, by_module_json) "
