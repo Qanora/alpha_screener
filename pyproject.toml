@@ -7,7 +7,7 @@ dependencies = [
     "tradingagents @ git+https://github.com/TauricResearch/TradingAgents.git@main",
 
     # 核心数值与数据处理
-    "numpy>=1.26,<2.0",
+    "numpy>=2.4.4,<3.0",
     "polars>=0.20",
     "pandas>=2.1",
     "pyarrow>=14",
