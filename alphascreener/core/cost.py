@@ -93,8 +93,11 @@ class CostCircuitBreaker:
         """Insert or accumulate a daily cost row."""
         if not isinstance(total_usd, (int, float)) or not math.isfinite(total_usd) or total_usd < 0:
             raise ValueError(f"total_usd must be a finite number >= 0, got {total_usd}")
-        if call_count < 0:
-            raise ValueError(f"call_count must be >= 0, got {call_count}")
+        if call_count < 0 or not isinstance(call_count, int) or isinstance(call_count, bool):
+            raise ValueError(
+                f"call_count must be a non-negative int, got {call_count!r} "
+                f"({type(call_count).__name__})"
+            )
         parsed = json.loads(by_module_json, parse_constant=_reject_non_finite_json)
         if not isinstance(parsed, dict):
             raise ValueError(f"by_module_json must be a JSON object, got {type(parsed).__name__}")

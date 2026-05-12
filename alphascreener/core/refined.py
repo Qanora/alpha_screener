@@ -98,7 +98,9 @@ def validate_breakout_assessment(
 
     if "final_rating" in parsed and parsed.get("final_rating") is not FinalRating.avoid:
         rating = parsed["final_rating"]
-        if isinstance(rating, str):
+        if isinstance(rating, FinalRating):
+            pass  # already a valid enum value
+        elif isinstance(rating, str):
             try:
                 parsed["final_rating"] = FinalRating(rating)
             except (ValueError, TypeError):
