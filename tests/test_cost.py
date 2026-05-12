@@ -255,6 +255,14 @@ class TestCostCircuitBreakerValidation:
         with pytest.raises(ValueError, match="L3 savings"):
             CostCircuitBreaker(settings)
 
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf"), -1.0])
+    def test_init_raises_on_non_finite_threshold(self, temp_db_path, settings, bad_value):
+        from alphascreener.core.cost import CostCircuitBreaker
+
+        settings.cost_l1_warning_daily_usd = bad_value
+        with pytest.raises(ValueError, match="finite"):
+            CostCircuitBreaker(settings)
+
     def test_record_raises_on_negative_cost(self, temp_db_path, settings):
         from alphascreener.core.cost import CostCircuitBreaker
 
@@ -290,3 +298,10 @@ class TestCostCircuitBreakerValidation:
         cb = CostCircuitBreaker(settings)
         with pytest.raises(ValueError, match="finite"):
             cb.record(date.today(), bad_value, 1, "{}")
+
+    def test_record_raises_on_nan_in_json(self, temp_db_path, settings):
+        from alphascreener.core.cost import CostCircuitBreaker
+
+        cb = CostCircuitBreaker(settings)
+        with pytest.raises(ValueError, match="Non-finite"):
+            cb.record(date.today(), 0.50, 1, '{"cost": NaN}')

@@ -18,11 +18,28 @@ class BreakerLevel(str, Enum):
     L4_CIRCUIT = "l4_circuit"
 
 
+def _reject_non_finite_json(value):  # type: ignore[no-untyped-def]
+    """parse_constant callback: reject NaN/Infinity in JSON."""
+    raise ValueError(f"Non-finite JSON constant not allowed: {value!r}")
+
+
 class CostCircuitBreaker:
     """Monitors daily and rolling-30-day LLM costs and trips breaker levels."""
 
     def __init__(self, settings) -> None:
         s = settings
+        thresholds = [
+            ("L1 warning", s.cost_l1_warning_daily_usd),
+            ("L2 degrade", s.cost_l2_degrade_daily_usd),
+            ("L3 savings", s.cost_l3_savings_monthly_avg_usd),
+            ("L4 circuit", s.cost_l4_circuit_monthly_avg_usd),
+        ]
+        for name, val in thresholds:
+            if not isinstance(val, (int, float)) or not math.isfinite(val) or val < 0:
+                raise ValueError(
+                    f"{name} threshold must be a finite non-negative number, got {val!r}"
+                )
+
         if s.cost_l1_warning_daily_usd > s.cost_l2_degrade_daily_usd:
             raise ValueError(
                 f"L1 warning ({s.cost_l1_warning_daily_usd}) must be <= "
@@ -36,24 +53,29 @@ class CostCircuitBreaker:
         self._settings = s
 
     def check(self) -> BreakerLevel:
-        """Evaluate cost against thresholds and return the active breaker level.
-
-        Levels are checked from highest to lowest so more severe
-        conditions always take precedence.
-        """
+        """Evaluate cost against thresholds and return the active breaker level."""
         today_str = date.today().isoformat()
         with get_db(self._settings.db_path) as conn:
             row = conn.execute(
                 "SELECT "
                 "COALESCE(SUM(CASE WHEN cost_date = ?1 "
                 "THEN total_usd ELSE 0 END), 0), "
-                "AVG(total_usd) "
+                "COALESCE(AVG(CASE WHEN total_usd IS NOT NULL AND total_usd = total_usd "
+                "THEN total_usd ELSE NULL END), 0) "
                 "FROM llm_cost_daily "
                 "WHERE cost_date BETWEEN date(?2, '-29 days') AND ?2",
                 (today_str, today_str),
             ).fetchone()
-            today_cost: float = row[0]
-            rolling_mean: float = row[1] or 0.0
+            today_cost_raw = row[0]
+            rolling_mean_raw = row[1]
+
+        today_cost = float(today_cost_raw)
+        rolling_mean = float(rolling_mean_raw)
+
+        if not math.isfinite(today_cost):
+            return BreakerLevel.L4_CIRCUIT
+        if not math.isfinite(rolling_mean):
+            return BreakerLevel.L4_CIRCUIT
 
         if rolling_mean >= self._settings.cost_l4_circuit_monthly_avg_usd:
             return BreakerLevel.L4_CIRCUIT
@@ -68,17 +90,12 @@ class CostCircuitBreaker:
     def record(
         self, cost_date: date, total_usd: float, call_count: int, by_module_json: str
     ) -> None:
-        """Insert or accumulate a daily cost row.
-
-        Uses INSERT ... ON CONFLICT DO UPDATE to accumulate total_usd
-        and call_count for an existing date, and replace by_module_json
-        with the latest value.
-        """
-        if total_usd < 0 or not math.isfinite(total_usd):
+        """Insert or accumulate a daily cost row."""
+        if not isinstance(total_usd, (int, float)) or not math.isfinite(total_usd) or total_usd < 0:
             raise ValueError(f"total_usd must be a finite number >= 0, got {total_usd}")
         if call_count < 0:
             raise ValueError(f"call_count must be >= 0, got {call_count}")
-        parsed = json.loads(by_module_json)
+        parsed = json.loads(by_module_json, parse_constant=_reject_non_finite_json)
         if not isinstance(parsed, dict):
             raise ValueError(f"by_module_json must be a JSON object, got {type(parsed).__name__}")
 
