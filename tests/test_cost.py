@@ -305,3 +305,10 @@ class TestCostCircuitBreakerValidation:
         cb = CostCircuitBreaker(settings)
         with pytest.raises(ValueError, match="Non-finite"):
             cb.record(date.today(), 0.50, 1, '{"cost": NaN}')
+
+    def test_record_raises_on_float_overflow_in_json(self, temp_db_path, settings):
+        from alphascreener.core.cost import CostCircuitBreaker
+
+        cb = CostCircuitBreaker(settings)
+        with pytest.raises(ValueError, match="Non-finite"):
+            cb.record(date.today(), 0.50, 1, '{"cost": 1e309}')

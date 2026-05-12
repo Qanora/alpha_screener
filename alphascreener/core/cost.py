@@ -23,6 +23,14 @@ def _reject_non_finite_json(value):  # type: ignore[no-untyped-def]
     raise ValueError(f"Non-finite JSON constant not allowed: {value!r}")
 
 
+def _parse_float_reject_non_finite(value: str) -> float:
+    """parse_float callback: reject overflow/NaN/Infinity."""
+    f = float(value)
+    if not math.isfinite(f):
+        raise ValueError(f"Non-finite float not allowed: {value!r} -> {f!r}")
+    return f
+
+
 class CostCircuitBreaker:
     """Monitors daily and rolling-30-day LLM costs and trips breaker levels."""
 
@@ -93,12 +101,16 @@ class CostCircuitBreaker:
         """Insert or accumulate a daily cost row."""
         if not isinstance(total_usd, (int, float)) or not math.isfinite(total_usd) or total_usd < 0:
             raise ValueError(f"total_usd must be a finite number >= 0, got {total_usd}")
-        if call_count < 0 or not isinstance(call_count, int) or isinstance(call_count, bool):
+        if not isinstance(call_count, int) or isinstance(call_count, bool) or call_count < 0:
             raise ValueError(
                 f"call_count must be a non-negative int, got {call_count!r} "
                 f"({type(call_count).__name__})"
             )
-        parsed = json.loads(by_module_json, parse_constant=_reject_non_finite_json)
+        parsed = json.loads(
+            by_module_json,
+            parse_constant=_reject_non_finite_json,
+            parse_float=_parse_float_reject_non_finite,
+        )
         if not isinstance(parsed, dict):
             raise ValueError(f"by_module_json must be a JSON object, got {type(parsed).__name__}")
 
