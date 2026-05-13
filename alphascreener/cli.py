@@ -3,6 +3,7 @@
 import logging
 
 import click
+import polars as pl
 
 from alphascreener import __version__
 from alphascreener.config import get_settings
@@ -209,9 +210,116 @@ def screen(top: int):
 
 @main.command()
 @click.option("--start", required=True, help="Backtest start date (YYYY-MM-DD)")
-def backtest(start: str):
-    """Run backtesting over a historical window."""
-    click.echo(f"Running backtest from {start}...")
+@click.option("--end", default=None, help="Backtest end date (YYYY-MM-DD), defaults to today")
+@click.option(
+    "--mode",
+    type=click.Choice(["full", "incremental", "backfill"]),
+    default="full",
+    help="Backtest mode: full (2-year window), incremental (latest day), backfill (paper_trades)",
+)
+def backtest(start: str, end: str | None, mode: str):
+    """Run backtesting using the backtrader engine.
+
+    \b
+    Examples:
+        alphascreener backtest --start 2023-01-01
+        alphascreener backtest --start 2024-01-01 --end 2024-12-31
+        alphascreener backtest --start 2024-01-01 --mode incremental
+        alphascreener backtest --start 2024-01-01 --mode backfill
+    """
+    from datetime import date as dt_date, timedelta
+
+    from alphascreener.config import get_settings
+    from alphascreener.core.backtest import BacktestEngine
+    from alphascreener.core.storage import DataStore
+
+    settings = get_settings()
+    store = DataStore()
+    engine = BacktestEngine()
+
+    start_date = dt_date.fromisoformat(start)
+    if end:
+        end_date = dt_date.fromisoformat(end)
+    else:
+        end_date = dt_date.today()
+
+    click.echo(f"Backtest mode: {mode}")
+    click.echo(f"Start date: {start_date}")
+    click.echo(f"End date: {end_date}")
+
+    if mode == "backfill":
+        click.echo("Backfilling paper trades...")
+        engine.backfill_paper_trades(settings.db_path)
+        click.echo("Paper trades backfill complete.")
+        return
+
+    # Collect signals from parquet storage
+    all_signals = []
+    d = start_date
+    while d <= end_date:
+        signals_df = store.read_signals(d, track="llm")
+        if signals_df is not None and not signals_df.is_empty():
+            all_signals.append(signals_df)
+        d += timedelta(days=1)
+
+    if not all_signals:
+        click.echo("No signals found in the date range.")
+        return
+
+    signals_df = pl.concat(all_signals)
+
+    # Collect OHLCV data for the date range plus lookback and lookahead
+    ohlcv_start = start_date - timedelta(days=14)
+    ohlcv_end = end_date + timedelta(days=14)
+
+    all_ohlcv = []
+    d = ohlcv_start
+    while d <= ohlcv_end:
+        df = store.read_ohlcv(d)
+        if df is not None and not df.is_empty():
+            all_ohlcv.append(df)
+        d += timedelta(days=1)
+
+    if not all_ohlcv:
+        click.echo("No OHLCV data found for the date range.")
+        return
+
+    ohlcv_df = pl.concat(all_ohlcv)
+
+    if mode == "incremental":
+        # Incremental: only backtest the target date's signals
+        target = start_date
+        results_df = engine.run_incremental(ohlcv_df, signals_df, target)
+        click.echo(f"Incremental backtest for {target}:")
+    else:
+        # Full backtest
+        results_df = engine.run(ohlcv_df, signals_df)
+
+    if results_df.is_empty():
+        click.echo("No trades generated.")
+        return
+
+    click.echo(f"\nGenerated {len(results_df)} trades:")
+    click.echo(f"{'Ticker':<8s} {'Entry':>10s} {'Exit':>10s} {'PnL%':>8s} {'Reason'}")
+    click.echo("-" * 55)
+    for row in results_df.iter_rows(named=True):
+        click.echo(
+            f"{row['ticker']:<8s} "
+            f"{str(row['entry_date']):>10s} "
+            f"{str(row['exit_date']):>10s} "
+            f"{row['pnl_pct']:>8.2f} "
+            f"{row['exit_reason']}"
+        )
+
+    # Print performance metrics
+    metrics = BacktestEngine.compute_metrics(results_df)
+    click.echo("\nPerformance Metrics:")
+    click.echo(f"  Win Rate:          {metrics['win_rate']:.2%}")
+    click.echo(f"  Avg Return:        {metrics['avg_return']:.2f}%")
+    click.echo(f"  Profit/Loss Ratio: {metrics['profit_loss_ratio']:.2f}")
+    click.echo(f"  Annualized Return: {metrics['annualized_return']:.2f}%")
+    click.echo(f"  Sharpe Ratio:      {metrics['sharpe_ratio']:.2f}")
+    click.echo(f"  Max Drawdown:      {metrics['max_drawdown']:.2f}%")
 
 
 if __name__ == "__main__":
