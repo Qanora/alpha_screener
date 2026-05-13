@@ -60,4 +60,6 @@ target-version = "py311"
 python_version = "3.11"
 check_untyped_defs = true
 ignore_missing_imports = true
-disable_error_code = ["operator", "union-attr"]
+# method-assign: needed for test monkeypatching (client.chat_with_json = mock)
+# var-annotated: needed for test helper locals without type annotations
+disable_error_code = ["operator", "union-attr", "method-assign", "var-annotated"]
