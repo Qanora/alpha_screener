@@ -31,6 +31,12 @@ class RiskTag(str, Enum):
 HARD_KILL_TAGS: frozenset[RiskTag] = frozenset({RiskTag.data_conflict, RiskTag.delisting_risk})
 
 
+class ExitReason(str, Enum):
+    stop_loss = "stop_loss"
+    hold_expiry = "hold_expiry"
+    manual = "manual"
+
+
 class FinalRating(str, Enum):
     strong_buy = "Strong Buy"
     buy = "Buy"

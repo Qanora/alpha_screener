@@ -1,35 +1,41 @@
-"""Backtrader-based backtesting engine (issue #6).
+"""Backtrader-based backtesting engine (issue #6)."""
 
-Rules:
-- 7 trading-day holding period
-- T+1 open market buy (entry_price = Open_{T+1})
-- T+7 close sell OR intraday stop loss at entry_price * 0.92
-- Equal weight per position, max 20 positions
-- 0.1% commission + 0.2% slippage
-- Benchmark: SPY
-"""
-
+import bisect
+import logging
 from datetime import date, timedelta
-from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import backtrader as bt
 import numpy as np
 import polars as pl
 
+from alphascreener.adapters.yfinance_adapter import OHLCV_COL_MAP
+from alphascreener.types import ExitReason
 
-class ExitReason(str, Enum):
-    stop_loss = "stop_loss"
-    hold_expiry = "hold_expiry"
-    manual = "manual"
+logger = logging.getLogger(__name__)
 
+_OHLCV_RENAME = {v: k for k, v in OHLCV_COL_MAP.items()}
 
-# Trading constants
-COMMISSION_RATE = 0.001  # 0.1% per side
-SLIPPAGE_RATE = 0.002  # 0.2% per side
-STOP_LOSS_PCT = 0.92  # Exit when Low <= entry_price * 0.92
+COMMISSION_RATE = 0.001
+SLIPPAGE_RATE = 0.002
+STOP_LOSS_PCT = 0.92
 HOLDING_DAYS = 7
 MAX_POSITIONS = 20
+LOOKBACK_DAYS = HOLDING_DAYS * 2  # padding for T+1 entry + 7-day hold
+
+_TRADE_RESULT_SCHEMA = {
+    "ticker": pl.Utf8,
+    "entry_date": pl.Date,
+    "entry_price": pl.Float64,
+    "exit_date": pl.Date,
+    "exit_price": pl.Float64,
+    "exit_reason": pl.Utf8,
+    "pnl_pct": pl.Float64,
+}
+
+
+def _empty_trade_result() -> pl.DataFrame:
+    return pl.DataFrame(schema=_TRADE_RESULT_SCHEMA)
 
 
 class AlphaScreenerStrategy(bt.Strategy):
@@ -85,8 +91,8 @@ class AlphaScreenerStrategy(bt.Strategy):
                 h["bars_held"] += 1
 
                 entry_price = h["entry_price"]
-                exit_reason: Optional[str] = None
-                exit_price: Optional[float] = None
+                exit_reason: str | None = None
+                exit_price: float | None = None
                 exit_date = current_date
 
                 # Stop loss: if intraday Low <= entry * 0.92, exit at Close
@@ -149,34 +155,21 @@ class BacktestEngine:
             DataFrame with columns: ticker, entry_date, entry_price, exit_date,
             exit_price, exit_reason, pnl_pct
         """
-        empty_result = pl.DataFrame(
-            schema={
-                "ticker": pl.Utf8,
-                "entry_date": pl.Date,
-                "entry_price": pl.Float64,
-                "exit_date": pl.Date,
-                "exit_price": pl.Float64,
-                "exit_reason": pl.Utf8,
-                "pnl_pct": pl.Float64,
-            }
-        )
+        empty_result = _empty_trade_result()
 
         if ohlcv_df.is_empty() or signals_df.is_empty():
             return empty_result
 
-        # Build entry map: for each signal at date T, entry is the next trading day
-        # First, get all unique trading days from OHLCV
         all_dates = sorted(ohlcv_df["date"].unique().to_list())
 
         entry_map: dict[str, set[date]] = {}
         for row in signals_df.iter_rows(named=True):
             ticker = row["ticker"]
             signal_date = row["signal_date"]
-            # Find the next trading day after signal_date
-            entry_date_candidates = [d for d in all_dates if d > signal_date]
-            if not entry_date_candidates:
+            idx = bisect.bisect_right(all_dates, signal_date)
+            if idx >= len(all_dates):
                 continue
-            entry_date = entry_date_candidates[0]
+            entry_date = all_dates[idx]
 
             if ticker not in entry_map:
                 entry_map[ticker] = set()
@@ -195,16 +188,7 @@ class BacktestEngine:
             ticker_df = ohlcv_df.filter(pl.col("ticker") == ticker).sort("date")
             data_df = ticker_df.to_pandas()
             data_df = data_df.set_index("date")
-            # backtrader PandasData expects columns with capital letters
-            data_df = data_df.rename(
-                columns={
-                    "open": "Open",
-                    "high": "High",
-                    "low": "Low",
-                    "close": "Close",
-                    "volume": "Volume",
-                }
-            )
+            data_df = data_df.rename(columns=_OHLCV_RENAME)
 
             data_feed = bt.feeds.PandasData(
                 dataname=data_df,
@@ -225,8 +209,6 @@ class BacktestEngine:
 
         # Set commission: 0.1% per side, stock-like
         cerebro.broker.setcommission(commission=COMMISSION_RATE)
-
-        # Run the backtest
         results = cerebro.run()
         strat = results[0]
 
@@ -258,17 +240,7 @@ class BacktestEngine:
         """
         filtered_signals = signals_df.filter(pl.col("signal_date") == target_date)
         if filtered_signals.is_empty():
-            return pl.DataFrame(
-                schema={
-                    "ticker": pl.Utf8,
-                    "entry_date": pl.Date,
-                    "entry_price": pl.Float64,
-                    "exit_date": pl.Date,
-                    "exit_price": pl.Float64,
-                    "exit_reason": pl.Utf8,
-                    "pnl_pct": pl.Float64,
-                }
-            )
+            return _empty_trade_result()
         return self.run(ohlcv_df, filtered_signals)
 
     def backfill_paper_trades(self, db_path) -> None:
@@ -280,13 +252,10 @@ class BacktestEngine:
         Args:
             db_path: Path to the SQLite database
         """
-        import sqlite3
-
         from alphascreener.core.storage import DataStore
+        from alphascreener.db import get_db
 
-        conn = sqlite3.connect(str(db_path))
-        try:
-            # Read paper trades that need backfilling
+        with get_db(db_path) as conn:
             rows = conn.execute(
                 "SELECT id, signal_date, ticker, rating, factor_version "
                 "FROM paper_trades "
@@ -298,15 +267,11 @@ class BacktestEngine:
 
             store = DataStore()
 
-            # Group signals by signal_date for efficient OHLCV loading
-            # For each signal, we need OHLCV from signal_date through signal_date + 14 days
-            # (covers next trading day entry + 7-day holding)
             for row in rows:
                 trade_id, signal_date_str, ticker, rating, factor_version = row
                 signal_date = date.fromisoformat(signal_date_str)
-                end_date = signal_date + timedelta(days=14)
+                end_date = signal_date + timedelta(days=LOOKBACK_DAYS)
 
-                # Load OHLCV data
                 d = signal_date - timedelta(days=1)
                 ohlcv_parts = []
                 while d <= end_date:
@@ -344,13 +309,11 @@ class BacktestEngine:
                     )
 
             conn.commit()
-        finally:
-            conn.close()
 
     @staticmethod
     def compute_metrics(
         trades_df: pl.DataFrame,
-        benchmark_returns: Optional[list[float]] = None,
+        benchmark_returns: list[float] | None = None,
     ) -> dict[str, float]:
         """Compute performance metrics from trade results.
 
@@ -372,48 +335,41 @@ class BacktestEngine:
                 "max_drawdown": 0.0,
             }
 
-        pnl_pcts = np.array(trades_df["pnl_pct"].to_list(), dtype=np.float64)
+        pnl_pcts = trades_df["pnl_pct"].to_numpy().astype(np.float64)
 
-        # Win rate
         wins = np.sum(pnl_pcts > 0)
         total = len(pnl_pcts)
         win_rate = wins / total if total > 0 else 0.0
 
-        # Average return
         avg_return = float(np.mean(pnl_pcts))
 
-        # Profit/loss ratio
         positive_returns = pnl_pcts[pnl_pcts > 0]
         negative_returns = pnl_pcts[pnl_pcts < 0]
         avg_win = float(np.mean(positive_returns)) if len(positive_returns) > 0 else 0.0
         avg_loss = float(np.mean(np.abs(negative_returns))) if len(negative_returns) > 0 else 0.0
         profit_loss_ratio = avg_win / avg_loss if avg_loss > 0 else 0.0
 
-        # Annualized return (assuming ~252 trading days)
-        # Count unique trading days from trades to estimate period
         if "entry_date" in trades_df.columns and "exit_date" in trades_df.columns:
-            all_dates = sorted(
-                set(trades_df["entry_date"].to_list()) | set(trades_df["exit_date"].to_list())
+            all_dates = (
+                pl.concat([trades_df["entry_date"], trades_df["exit_date"]])
+                .unique()
+                .sort()
+                .to_list()
             )
             if len(all_dates) >= 2:
                 days_span = (all_dates[-1] - all_dates[0]).days
-                years = max(days_span / 365.25, 0.019)  # minimum ~1 week
+                years = max(days_span / 365.25, 0.019)
             else:
                 years = 1.0
         else:
             years = 1.0
 
-        # Simple annualized: combine returns multiplicatively and annualize
-        cum_return = 1.0
-        for p in pnl_pcts:
-            cum_return *= 1.0 + p / 100.0
-        annualized_return = (cum_return ** (1.0 / years) - 1.0) * 100.0
+        cum_array = np.cumprod(1.0 + pnl_pcts / 100.0)
+        annualized_return = (cum_array[-1] ** (1.0 / years) - 1.0) * 100.0
 
-        # Sharpe ratio (assuming 0% risk-free rate)
         if len(pnl_pcts) > 1:
             mean_return = float(np.mean(pnl_pcts))
             std_return = float(np.std(pnl_pcts, ddof=1))
-            # Annualized Sharpe
             sharpe_ratio = (
                 (mean_return / std_return) * np.sqrt(252.0 / HOLDING_DAYS)
                 if std_return > 0
@@ -422,13 +378,6 @@ class BacktestEngine:
         else:
             sharpe_ratio = 0.0
 
-        # Maximum drawdown from cumulative returns
-        cum_returns = []
-        cum = 1.0
-        for p in pnl_pcts:
-            cum *= 1.0 + p / 100.0
-            cum_returns.append(cum)
-        cum_array = np.array(cum_returns)
         peak = np.maximum.accumulate(cum_array)
         drawdowns = (cum_array - peak) / peak
         max_drawdown = float(np.min(drawdowns) * 100) if len(drawdowns) > 0 else 0.0

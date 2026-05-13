@@ -357,19 +357,9 @@ class TestPerformanceMetrics:
 
     def test_compute_metrics_empty(self):
         """Empty trade data should return zero metrics."""
-        from alphascreener.core.backtest import BacktestEngine
+        from alphascreener.core.backtest import BacktestEngine, _empty_trade_result
 
-        empty_df = pl.DataFrame(
-            schema={
-                "ticker": pl.Utf8,
-                "entry_date": pl.Date,
-                "entry_price": pl.Float64,
-                "exit_date": pl.Date,
-                "exit_price": pl.Float64,
-                "exit_reason": pl.Utf8,
-                "pnl_pct": pl.Float64,
-            }
-        )
+        empty_df = _empty_trade_result()
 
         metrics = BacktestEngine.compute_metrics(empty_df)
 

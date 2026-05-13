@@ -10,7 +10,7 @@ import httpx
 import numpy as np
 from pydantic import ValidationError
 
-from alphascreener.core.cost import CostCircuitBreaker
+from alphascreener.core.cost import BreakerLevel, CostCircuitBreaker
 from alphascreener.core.rate_limiter import RateLimiter
 from alphascreener.core.refined import (
     AnalystReport,
@@ -21,9 +21,14 @@ from alphascreener.core.refined import (
 
 logger = logging.getLogger(__name__)
 
-# Cost per 1M tokens for gpt-4o-mini
 _COST_PER_1M_INPUT = 0.15
 _COST_PER_1M_OUTPUT = 0.60
+
+
+def _compute_llm_cost(prompt_tokens: int, completion_tokens: int) -> float:
+    return (
+        prompt_tokens * _COST_PER_1M_INPUT + completion_tokens * _COST_PER_1M_OUTPUT
+    ) / 1_000_000
 
 
 def _extract_json_from_text(text: str) -> str:
@@ -32,22 +37,21 @@ def _extract_json_from_text(text: str) -> str:
     Handles responses wrapped in ```json ... ``` fences or with leading/trailing text.
     """
     text = text.strip()
-    # Try to find JSON in code fences
     if "```json" in text:
         start = text.index("```json") + 7
         end = text.rindex("```")
         if end > start:
             return text[start:end].strip()
-    if "```" in text:
+    elif "```" in text:
         start = text.index("```") + 3
         end = text.rindex("```")
         if end > start:
             return text[start:end].strip()
-    # Try to find first { and last }
-    brace_start = text.find("{")
-    brace_end = text.rfind("}")
-    if brace_start != -1 and brace_end > brace_start:
-        return text[brace_start : brace_end + 1]
+    else:
+        brace_start = text.find("{")
+        brace_end = text.rfind("}")
+        if brace_start != -1 and brace_end > brace_start:
+            return text[brace_start : brace_end + 1]
     return text
 
 
@@ -172,11 +176,7 @@ class LLMClient:
         usage = data.get("usage", {})
         prompt_tokens = usage.get("prompt_tokens", 0)
         completion_tokens = usage.get("completion_tokens", 0)
-        # Calculate cost
-        cost_usd = (
-            prompt_tokens * _COST_PER_1M_INPUT / 1_000_000
-            + completion_tokens * _COST_PER_1M_OUTPUT / 1_000_000
-        )
+        cost_usd = _compute_llm_cost(prompt_tokens, completion_tokens)
 
         self._record_llm_cost("llm_dag", prompt_tokens, completion_tokens, cost_usd)
 
@@ -223,7 +223,7 @@ class LLMClient:
     async def _parse_analyst_report(self, json_text: str, ticker: str) -> AnalystReport:
         """Parse JSON into AnalystReport with fallback on failure."""
         try:
-            parsed = json.loads(_extract_json_from_text(json_text))
+            parsed = json.loads(json_text)
             if not isinstance(parsed, dict):
                 raise ValueError("Not a JSON object")
             return AnalystReport(**parsed)
@@ -240,7 +240,7 @@ class LLMClient:
     async def _parse_bull_bear_output(self, json_text: str, ticker: str) -> BullBearOutput:
         """Parse JSON into BullBearOutput with fallback on failure."""
         try:
-            parsed = json.loads(_extract_json_from_text(json_text))
+            parsed = json.loads(json_text)
             if not isinstance(parsed, dict):
                 raise ValueError("Not a JSON object")
             return BullBearOutput(**parsed)
@@ -264,10 +264,7 @@ class LLMClient:
     ) -> None:
         """Record LLM API cost for later flushing to the circuit breaker."""
         if cost_usd is None:
-            cost_usd = (
-                prompt_tokens * _COST_PER_1M_INPUT / 1_000_000
-                + completion_tokens * _COST_PER_1M_OUTPUT / 1_000_000
-            )
+            cost_usd = _compute_llm_cost(prompt_tokens, completion_tokens)
         self._cost_records.append(
             {
                 "module": module,
@@ -471,7 +468,7 @@ async def breakout_analyst(
     user_prompt = _build_analyst_user_prompt(
         "Breakout",
         ticker_data,
-        " ".join(extra_context),
+        "\n".join(extra_context),
     )
     json_text = await llm_client.chat_with_json(
         system_prompt=_ANALYST_SYSTEM_PROMPT,
@@ -644,7 +641,7 @@ async def _process_single_ticker(
     try:
         # Stage 0: Check circuit breaker
         breaker_level = llm_client.check_breaker()
-        if breaker_level.value in ("l3_savings", "l4_circuit"):
+        if breaker_level in (BreakerLevel.L3_SAVINGS, BreakerLevel.L4_CIRCUIT):
             logger.warning(
                 "Circuit breaker at %s, returning default assessment for %s",
                 breaker_level.value,
@@ -683,6 +680,8 @@ async def _process_single_ticker(
         return assessment
 
     except Exception as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit, asyncio.CancelledError)):
+            raise
         logger.error("DAG pipeline failed for %s: %s", ticker, e)
         return BreakoutAssessment(ticker=ticker)
 
