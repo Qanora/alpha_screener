@@ -7,7 +7,9 @@ import pytest
 
 from alphascreener.db import get_db, init_db
 
-_TODAY = date.today().isoformat()
+
+def _today_str() -> str:
+    return date.today().isoformat()
 
 
 class TestBreakerLevel:
@@ -58,7 +60,7 @@ class TestCostCircuitBreakerCheck:
             conn.execute(
                 "INSERT INTO llm_cost_daily (cost_date, total_usd, call_count, by_module_json) "
                 "VALUES (?, 0.50, 5, '{}')",
-                (_TODAY,),
+                (_today_str(),),
             )
             conn.commit()
 
@@ -72,7 +74,7 @@ class TestCostCircuitBreakerCheck:
             conn.execute(
                 "INSERT INTO llm_cost_daily (cost_date, total_usd, call_count, by_module_json) "
                 "VALUES (?, 0.80, 10, '{}')",
-                (_TODAY,),
+                (_today_str(),),
             )
             conn.commit()
 
@@ -86,7 +88,7 @@ class TestCostCircuitBreakerCheck:
             conn.execute(
                 "INSERT INTO llm_cost_daily (cost_date, total_usd, call_count, by_module_json) "
                 "VALUES (?, 1.00, 12, '{}')",
-                (_TODAY,),
+                (_today_str(),),
             )
             conn.commit()
 
@@ -133,7 +135,7 @@ class TestCostCircuitBreakerCheck:
             conn.execute(
                 "INSERT INTO llm_cost_daily (cost_date, total_usd, call_count, by_module_json) "
                 "VALUES (?, 1.00, 12, '{}')",
-                (_TODAY,),
+                (_today_str(),),
             )
             for i in range(1, 30):
                 d = (date.today() - timedelta(days=i)).isoformat()
@@ -194,7 +196,7 @@ class TestCostCircuitBreakerRecord:
             row = conn.execute(
                 "SELECT total_usd, call_count, by_module_json "
                 "FROM llm_cost_daily WHERE cost_date = ?",
-                (_TODAY,),
+                (_today_str(),),
             ).fetchone()
 
         assert row[0] == 0.50
@@ -212,12 +214,12 @@ class TestCostCircuitBreakerRecord:
             row = conn.execute(
                 "SELECT total_usd, call_count, by_module_json "
                 "FROM llm_cost_daily WHERE cost_date = ?",
-                (_TODAY,),
+                (_today_str(),),
             ).fetchone()
 
         assert row[0] == 0.80  # 0.50 + 0.30
         assert row[1] == 8  # 5 + 3
-        assert row[2] == '{"eval": 0.30}'  # latest value replaces old
+        assert json.loads(row[2]) == {"screening": 0.50, "eval": 0.30}  # merged
 
     def test_stores_by_module_json_as_provided(self, temp_db_path, settings):
         from alphascreener.core.cost import CostCircuitBreaker
@@ -230,7 +232,7 @@ class TestCostCircuitBreakerRecord:
         with get_db(temp_db_path) as conn:
             row = conn.execute(
                 "SELECT by_module_json FROM llm_cost_daily WHERE cost_date = ?",
-                (_TODAY,),
+                (_today_str(),),
             ).fetchone()
 
         assert row[0] == module_json

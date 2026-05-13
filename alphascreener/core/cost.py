@@ -68,8 +68,8 @@ class CostCircuitBreaker:
                 "SELECT "
                 "COALESCE(SUM(CASE WHEN cost_date = ?1 "
                 "THEN total_usd ELSE 0 END), 0), "
-                "COALESCE(AVG(CASE WHEN total_usd IS NOT NULL AND total_usd = total_usd "
-                "THEN total_usd ELSE NULL END), 0) "
+                "COALESCE(SUM(CASE WHEN total_usd IS NOT NULL AND total_usd = total_usd "
+                "THEN total_usd ELSE 0.0 END), 0) / 30.0 "
                 "FROM llm_cost_daily "
                 "WHERE cost_date BETWEEN date(?2, '-29 days') AND ?2",
                 (today_str, today_str),
@@ -115,6 +115,25 @@ class CostCircuitBreaker:
             raise ValueError(f"by_module_json must be a JSON object, got {type(parsed).__name__}")
 
         with get_db(self._settings.db_path) as conn:
+            existing = conn.execute(
+                "SELECT by_module_json FROM llm_cost_daily WHERE cost_date = ?",
+                (cost_date.isoformat(),),
+            ).fetchone()
+
+            merged_json = by_module_json
+            if existing is not None:
+                try:
+                    existing_json = json.loads(
+                        existing[0],
+                        parse_constant=_reject_non_finite_json,
+                        parse_float=_parse_float_reject_non_finite,
+                    )
+                    if isinstance(existing_json, dict):
+                        existing_json.update(parsed)
+                        merged_json = json.dumps(existing_json)
+                except (json.JSONDecodeError, ValueError):
+                    pass  # keep new value if existing is corrupt
+
             conn.execute(
                 "INSERT INTO llm_cost_daily "
                 "(cost_date, total_usd, call_count, by_module_json) "
@@ -123,6 +142,6 @@ class CostCircuitBreaker:
                 "total_usd = total_usd + excluded.total_usd, "
                 "call_count = call_count + excluded.call_count, "
                 "by_module_json = excluded.by_module_json",
-                (cost_date.isoformat(), total_usd, call_count, by_module_json),
+                (cost_date.isoformat(), total_usd, call_count, merged_json),
             )
             conn.commit()
