@@ -298,10 +298,9 @@ class LLMClient:
                 call_count=total_calls,
                 by_module_json=json.dumps(by_module),
             )
+            self._cost_records.clear()
         except Exception as e:
-            logger.warning("Failed to flush LLM costs: %s", e)
-
-        self._cost_records.clear()
+            logger.warning("Failed to flush LLM costs, will retry next batch: %s", e)
 
     def check_breaker(self):
         """Check the cost circuit breaker level. Returns the active BreakerLevel."""

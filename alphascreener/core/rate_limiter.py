@@ -29,27 +29,24 @@ class RateLimiter:
             await asyncio.Event().wait()
             return
 
-        async with self._lock:
-            now = time.monotonic()
-            window_start = now - 1.0
-            while self._timestamps and self._timestamps[0] < window_start:
-                self._timestamps.popleft()
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                window_start = now - 1.0
+                while self._timestamps and self._timestamps[0] < window_start:
+                    self._timestamps.popleft()
 
-            if len(self._timestamps) < self._rps:
-                self._timestamps.append(now)
-                return
+                if len(self._timestamps) < self._rps:
+                    self._timestamps.append(now)
+                    return
 
-            # Capture earliest timestamp while holding lock
-            wait_time = self._timestamps[0] + 1.0 - now
+                wait_time = self._timestamps[0] + 1.0 - now
 
-        if wait_time > 0:
-            logger.debug(
-                "RateLimiter throttling for %.3fs (%d/%d calls in window)",
-                wait_time,
-                len(self._timestamps),
-                self._rps,
-            )
-            await asyncio.sleep(wait_time)
-
-        async with self._lock:
-            self._timestamps.append(time.monotonic())
+            if wait_time > 0:
+                logger.debug(
+                    "RateLimiter throttling for %.3fs (%d/%d calls in window)",
+                    wait_time,
+                    len(self._timestamps),
+                    self._rps,
+                )
+                await asyncio.sleep(wait_time)
