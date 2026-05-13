@@ -311,15 +311,11 @@ class BacktestEngine:
             conn.commit()
 
     @staticmethod
-    def compute_metrics(
-        trades_df: pl.DataFrame,
-        benchmark_returns: list[float] | None = None,
-    ) -> dict[str, float]:
+    def compute_metrics(trades_df: pl.DataFrame) -> dict[str, float]:
         """Compute performance metrics from trade results.
 
         Args:
             trades_df: Trade results with pnl_pct column
-            benchmark_returns: Optional list of benchmark (SPY) daily returns
 
         Returns:
             dict with keys: win_rate, avg_return, profit_loss_ratio,
