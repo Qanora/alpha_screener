@@ -129,7 +129,15 @@ class CostCircuitBreaker:
                         parse_float=_parse_float_reject_non_finite,
                     )
                     if isinstance(existing_json, dict):
-                        existing_json.update(parsed)
+                        for key, val in parsed.items():
+                            if (
+                                key in existing_json
+                                and isinstance(existing_json[key], (int, float))
+                                and isinstance(val, (int, float))
+                            ):
+                                existing_json[key] += val
+                            else:
+                                existing_json[key] = val
                         merged_json = json.dumps(existing_json)
                 except (json.JSONDecodeError, ValueError):
                     pass  # keep new value if existing is corrupt

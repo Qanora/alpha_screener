@@ -108,7 +108,7 @@ def validate_breakout_assessment(
         else:
             parsed["final_rating"] = FinalRating.hold
 
-    if "ticker" not in parsed:
+    if "ticker" not in parsed or not isinstance(parsed.get("ticker"), str) or not parsed["ticker"]:
         parsed["ticker"] = default_ticker
 
     if "breakout_probability" in parsed:

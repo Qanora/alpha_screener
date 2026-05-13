@@ -219,7 +219,9 @@ class TestCostCircuitBreakerRecord:
 
         assert row[0] == 0.80  # 0.50 + 0.30
         assert row[1] == 8  # 5 + 3
-        assert json.loads(row[2]) == {"screening": 0.50, "eval": 0.30}  # merged
+        merged = json.loads(row[2])
+        assert merged["screening"] == 0.50
+        assert merged["eval"] == 0.30
 
     def test_stores_by_module_json_as_provided(self, temp_db_path, settings):
         from alphascreener.core.cost import CostCircuitBreaker
