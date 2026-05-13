@@ -501,6 +501,8 @@ The JSON must have these exact fields:
 
 def _build_researcher_user_prompt(analyst_reports: list[AnalystReport], perspective: str) -> str:
     """Build the user prompt for Bull or Bear researcher."""
+    if not analyst_reports:
+        raise ValueError("analyst_reports must not be empty")
     ticker = analyst_reports[0].ticker
     lines = [
         f"## {perspective} Research Thesis for {ticker}",
