@@ -237,16 +237,23 @@ def backtest(start: str, end: str | None, mode: str):
     store = DataStore()
     engine = BacktestEngine()
 
-    start_date = dt_date.fromisoformat(start)
+    try:
+        start_date = dt_date.fromisoformat(start)
+    except ValueError:
+        raise click.BadParameter(f"Invalid --start date: '{start}'. Use YYYY-MM-DD.")
+
     if end:
-        end_date = dt_date.fromisoformat(end)
+        try:
+            end_date = dt_date.fromisoformat(end)
+        except ValueError:
+            raise click.BadParameter(f"Invalid --end date: '{end}'. Use YYYY-MM-DD.")
     else:
         end_date = dt_date.today()
 
     if start_date > end_date:
         raise click.BadParameter(f"Start date ({start_date}) must be <= end date ({end_date})")
 
-    if mode == "incremental" and start_date != (end if end else None):
+    if mode == "incremental" and end is not None:
         click.echo(
             "Note: --mode incremental only backtests signals on --start date; --end is ignored."
         )
