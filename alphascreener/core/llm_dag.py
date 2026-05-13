@@ -39,12 +39,12 @@ def _extract_json_from_text(text: str) -> str:
     text = text.strip()
     if "```json" in text:
         start = text.index("```json") + 7
-        end = text.rindex("```")
+        end = text.find("```", start)
         if end > start:
             return text[start:end].strip()
     elif "```" in text:
         start = text.index("```") + 3
-        end = text.rindex("```")
+        end = text.find("```", start)
         if end > start:
             return text[start:end].strip()
     else:
@@ -135,7 +135,9 @@ class LLMClient:
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._http_client is None:
-            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(connect=10.0, read=60.0, write=30.0, pool=5.0)
+            )
         return self._http_client
 
     async def chat(
@@ -649,7 +651,7 @@ async def _process_single_ticker(
             )
             return BreakoutAssessment(ticker=ticker)
 
-        # Stage 0: 4 Analysts in parallel
+        # Stage 1: 4 Analysts in parallel
         market_task = market_analyst(ticker_data, llm_client)
         news_task = news_analyst(ticker_data, llm_client)
         fundamentals_task = fundamentals_analyst(ticker_data, llm_client)

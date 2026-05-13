@@ -230,7 +230,7 @@ def backtest(start: str, end: str | None, mode: str):
     from datetime import date as dt_date, timedelta
 
     from alphascreener.config import get_settings
-    from alphascreener.core.backtest import BacktestEngine
+    from alphascreener.core.backtest import BacktestEngine, LOOKBACK_DAYS
     from alphascreener.core.storage import DataStore
 
     settings = get_settings()
@@ -243,6 +243,14 @@ def backtest(start: str, end: str | None, mode: str):
     else:
         end_date = dt_date.today()
 
+    if start_date > end_date:
+        raise click.BadParameter(f"Start date ({start_date}) must be <= end date ({end_date})")
+
+    if mode == "incremental" and start_date != (end if end else None):
+        click.echo(
+            "Note: --mode incremental only backtests signals on --start date; --end is ignored."
+        )
+
     click.echo(f"Backtest mode: {mode}")
     click.echo(f"Start date: {start_date}")
     click.echo(f"End date: {end_date}")
@@ -253,7 +261,7 @@ def backtest(start: str, end: str | None, mode: str):
         click.echo("Paper trades backfill complete.")
         return
 
-    # Collect signals from parquet storage
+    lookback = timedelta(days=LOOKBACK_DAYS)
     all_signals = []
     d = start_date
     while d <= end_date:
@@ -268,9 +276,8 @@ def backtest(start: str, end: str | None, mode: str):
 
     signals_df = pl.concat(all_signals)
 
-    # Collect OHLCV data for the date range plus lookback and lookahead
-    ohlcv_start = start_date - timedelta(days=14)
-    ohlcv_end = end_date + timedelta(days=14)
+    ohlcv_start = start_date - lookback
+    ohlcv_end = end_date + lookback
 
     all_ohlcv = []
     d = ohlcv_start
